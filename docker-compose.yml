@@ -1,0 +1,288 @@
+version: '3.8'
+
+# ═══════════════════════════════════════════════════════════════════
+#  NETWORKS
+#  Two networks = security isolation:
+#
+#  public_net  → only the Dispatcher is on this network
+#                This is how it can receive traffic from outside
+#
+#  internal_net → all services are on this network
+#                 Services talk to each other here
+#                 But it's NOT reachable from outside Docker
+#
+#  Result: You CANNOT call auth-service:8081 from your browser.
+#          Only the Dispatcher (which is on both networks) can.
+# ═══════════════════════════════════════════════════════════════════
+networks:
+  public_net:
+    driver: bridge
+  internal_net:
+    driver: bridge
+
+# ═══════════════════════════════════════════════════════════════════
+#  VOLUMES
+#  Named volumes persist data between container restarts.
+#  Without this, every `docker-compose down` would wipe your database!
+# ═══════════════════════════════════════════════════════════════════
+volumes:
+  dispatcher_mongo_data:
+  auth_mongo_data:
+  idea_mongo_data:
+  deal_mongo_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+# ═══════════════════════════════════════════════════════════════════
+#  SERVICES
+# ═══════════════════════════════════════════════════════════════════
+services:
+
+  # ─────────────────────────────────────────────────────────────────
+  # DISPATCHER — The only public-facing service
+  # Port 8080 is the ONLY port exposed to your host machine.
+  # ─────────────────────────────────────────────────────────────────
+  dispatcher:
+    build:
+      context: .                      # build context = project root
+      dockerfile: dispatcher/Dockerfile
+    container_name: dispatcher
+    ports:
+      - "8080:8080"                   # HOST:CONTAINER — only exposed port!
+    networks:
+      - public_net                    # receives traffic from outside
+      - internal_net                  # talks to internal services
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://dispatcher-mongo:27017/dispatcherdb
+      SPRING_DATA_REDIS_HOST: redis
+      AUTH_SERVICE_URL: http://auth-service:8081
+      IDEA_SERVICE_URL: http://idea-service:8082
+      DEAL_SERVICE_URL: http://deal-service:8083
+      AI_SERVICE_URL: http://ai-service:8084
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      dispatcher-mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ─────────────────────────────────────────────────────────────────
+  # AUTH SERVICE — Internal only, no ports exposed to host
+  # ─────────────────────────────────────────────────────────────────
+  auth-service:
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
+    container_name: auth-service
+    # NO ports: section → not reachable from your browser
+    networks:
+      - internal_net
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://auth-mongo:27017/authdb
+      SPRING_DATA_REDIS_HOST: redis
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      auth-mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ─────────────────────────────────────────────────────────────────
+  # IDEA SERVICE — Internal only
+  # ─────────────────────────────────────────────────────────────────
+  idea-service:
+    build:
+      context: .
+      dockerfile: idea-service/Dockerfile
+    container_name: idea-service
+    networks:
+      - internal_net
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://idea-mongo:27017/ideadb
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      idea-mongo:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ─────────────────────────────────────────────────────────────────
+  # DEAL SERVICE — Internal only
+  # ─────────────────────────────────────────────────────────────────
+  deal-service:
+    build:
+      context: .
+      dockerfile: deal-service/Dockerfile
+    container_name: deal-service
+    networks:
+      - internal_net
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://deal-mongo:27017/dealdb
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      deal-mongo:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ─────────────────────────────────────────────────────────────────
+  # AI SERVICE — Internal only (optional bonus)
+  # ─────────────────────────────────────────────────────────────────
+  ai-service:
+    build:
+      context: .
+      dockerfile: ai-service/Dockerfile
+    container_name: ai-service
+    networks:
+      - internal_net
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://deal-mongo:27017/aidb
+      SPRING_DATA_REDIS_HOST: redis
+      JWT_SECRET: ${JWT_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-not-set}
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─────────────────────────────────────────────────────────────────
+  # MONGODB INSTANCES — One per service (data isolation!)
+  # Each service has its OWN MongoDB — they cannot query each other.
+  # All on port 27017 inside their own container (no conflict).
+  # ─────────────────────────────────────────────────────────────────
+  dispatcher-mongo:
+    image: mongo:7
+    container_name: dispatcher-mongo
+    networks:
+      - internal_net
+    volumes:
+      - dispatcher_mongo_data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  auth-mongo:
+    image: mongo:7
+    container_name: auth-mongo
+    networks:
+      - internal_net
+    volumes:
+      - auth_mongo_data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  idea-mongo:
+    image: mongo:7
+    container_name: idea-mongo
+    networks:
+      - internal_net
+    volumes:
+      - idea_mongo_data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  deal-mongo:
+    image: mongo:7
+    container_name: deal-mongo
+    networks:
+      - internal_net
+    volumes:
+      - deal_mongo_data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────────────
+  # REDIS — Shared by dispatcher + auth-service + ai-service
+  # Used for: JWT blacklist, session store, AI rate limiting
+  # ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    networks:
+      - internal_net
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────────────
+  # PROMETHEUS — Scrapes /actuator/prometheus from all services
+  # Stores time-series metrics data
+  # ─────────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    networks:
+      - internal_net
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=7d'
+    restart: unless-stopped
+
+  # ─────────────────────────────────────────────────────────────────
+  # GRAFANA — Visualizes Prometheus metrics as dashboards
+  # Exposed on port 3000 so you can open it in your browser
+  # ─────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"                   # Open http://localhost:3000
+    networks:
+      - internal_net
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: false
+    depends_on:
+      - prometheus
+    restart: unless-stopped
