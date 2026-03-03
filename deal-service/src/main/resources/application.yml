@@ -1,0 +1,27 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: deal-service
+
+  data:
+    mongodb:
+      uri: ${DEAL_MONGO_URI:mongodb://localhost:27019/dealdb}
+
+jwt:
+  secret: ${JWT_SECRET:please-set-this-in-your-env-file-min-32-chars}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+logging:
+  level:
+    com.platform.deal: DEBUG

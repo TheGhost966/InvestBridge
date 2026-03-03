@@ -13,55 +13,73 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>idea-service</artifactId>
+    <artifactId>auth-service</artifactId>
     <packaging>jar</packaging>
-    <n>Idea Service</n>
+    <name>Auth Service</name>
     <description>
-        Core business logic. Founders create ideas, admins verify them,
-        investors browse verified ideas. Stores ideas in its own MongoDB.
+        Handles user registration, login, logout. Issues and validates JWTs.
+        Stores users in its own MongoDB. Blacklists tokens in Redis on logout.
     </description>
 
     <dependencies>
 
-        <!-- Web: REST endpoints (/ideas, /ideas/{id}, etc.) -->
+        <!-- Web: REST endpoints (/auth/register, /auth/login, etc.) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
-        <!--
-        Security: used to extract the user's role from the JWT
-        that the Dispatcher attaches to forwarded requests.
-        No BCrypt needed here — auth-service handles passwords.
-        -->
+        <!-- Security: BCrypt password hashing + SecurityFilterChain -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
-        <!-- MongoDB: stores Idea documents -->
+        <!-- MongoDB: stores User documents + audit logs -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-mongodb</artifactId>
         </dependency>
 
-        <!-- Validation: @NotBlank on Idea creation request DTOs -->
+        <!-- Redis: stores blacklisted JWT tokens (after logout) with TTL -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <!-- Validation: @NotBlank, @Email on request DTOs -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
-        <!-- Actuator + Prometheus -->
+        <!-- JWT: generate tokens on login, validate on /auth/me -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+        </dependency>
+
+        <!-- Actuator: /actuator/health for Docker healthcheck -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+
+        <!-- Prometheus: metrics scraping -->
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
-        <!-- Structured logging -->
+        <!-- Structured JSON logging with correlation_id -->
         <dependency>
             <groupId>net.logstash.logback</groupId>
             <artifactId>logstash-logback-encoder</artifactId>

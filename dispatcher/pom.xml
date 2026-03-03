@@ -31,7 +31,7 @@
     -->
     <artifactId>dispatcher</artifactId>
     <packaging>jar</packaging>
-    <n>Dispatcher Service</n>
+    <name>Dispatcher Service</name>
     <description>
         Public-facing gateway. Handles: JWT validation, role-based authorization,
         request routing to internal services, Prometheus metrics, structured logging.

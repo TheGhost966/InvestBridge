@@ -13,38 +13,40 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>deal-service</artifactId>
+    <artifactId>ai-service</artifactId>
     <packaging>jar</packaging>
-    <n>Deal Service</n>
+    <name>AI Service (Optional Bonus)</name>
     <description>
-        Manages investor profiles, offers from investors to founders,
-        match creation when offers are accepted, and abuse reports.
+        Optional bonus service. Calls OpenAI API to provide idea feedback,
+        investor matching suggestions, and risk scoring.
+        Uses Redis for rate limiting and MongoDB for caching AI responses.
     </description>
 
     <dependencies>
 
-        <!-- Web: REST endpoints (/deals/offers, /deals/matches, etc.) -->
+        <!-- Web: REST endpoints (/ai/improve-idea, /ai/risk-score, etc.) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
-        <!-- Security: role-based access (INVESTOR vs FOUNDER vs ADMIN) -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-security</artifactId>
-        </dependency>
-
-        <!-- MongoDB: stores InvestorProfile, Offer, Match, AbuseReport docs -->
+        <!--
+        MongoDB: cache AI responses (same prompt → same answer for 24h).
+        Saves OpenAI API costs and improves response time.
+        -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-mongodb</artifactId>
         </dependency>
 
-        <!-- Validation: validate offer amounts, required fields -->
+        <!--
+        Redis: per-user rate limiting counter.
+        e.g. "user:abc123:ai-calls" = 5 → increment each call,
+        set TTL = 1 hour, reject if > 10.
+        -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-validation</artifactId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
         <!-- Actuator + Prometheus -->
@@ -65,13 +67,8 @@
 
         <!-- Tests -->
         <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>mongodb</artifactId>
+            <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
 

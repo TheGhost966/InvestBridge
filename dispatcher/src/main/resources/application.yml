@@ -1,0 +1,50 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: dispatcher
+
+  # MongoDB — dispatcher uses this for audit logs
+  data:
+    mongodb:
+      uri: ${DISPATCHER_MONGO_URI:mongodb://localhost:27020/dispatcherdb}
+
+    # Redis — used to check JWT blacklist (logged-out tokens)
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: 6379
+
+# ── INTERNAL SERVICE URLS ─────────────────────────────────────────────────────
+# These are the Docker internal hostnames (from docker-compose service names).
+# Locally (without Docker) you'd change these to localhost:8081 etc.
+routes:
+  auth-service:    ${AUTH_SERVICE_URL:http://auth-service:8081}
+  idea-service:    ${IDEA_SERVICE_URL:http://idea-service:8082}
+  deal-service:    ${DEAL_SERVICE_URL:http://deal-service:8083}
+  ai-service:      ${AI_SERVICE_URL:http://ai-service:8084}
+
+# ── JWT ───────────────────────────────────────────────────────────────────────
+# Secret is injected from .env file — NEVER hardcode it here
+jwt:
+  secret: ${JWT_SECRET:please-set-this-in-your-env-file-min-32-chars}
+
+# ── ACTUATOR (Health + Prometheus metrics) ────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus, metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# ── LOGGING ───────────────────────────────────────────────────────────────────
+logging:
+  level:
+    com.platform.dispatcher: DEBUG
+    org.springframework.web: INFO

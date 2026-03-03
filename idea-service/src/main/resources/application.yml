@@ -1,0 +1,27 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: idea-service
+
+  data:
+    mongodb:
+      uri: ${IDEA_MONGO_URI:mongodb://localhost:27018/ideadb}
+
+jwt:
+  secret: ${JWT_SECRET:please-set-this-in-your-env-file-min-32-chars}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+logging:
+  level:
+    com.platform.idea: DEBUG

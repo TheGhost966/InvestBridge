@@ -1,0 +1,42 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: ai-service
+
+  data:
+    mongodb:
+      uri: ${AI_MONGO_URI:mongodb://localhost:27021/aidb}
+
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: 6379
+
+# OpenAI API key — injected from .env, never hardcoded
+openai:
+  api-key: ${OPENAI_API_KEY:set-this-in-env-file}
+  model: gpt-4o-mini
+  max-tokens: 500
+
+# Max AI calls per user per hour
+ai:
+  rate-limit:
+    max-calls-per-hour: 10
+
+jwt:
+  secret: ${JWT_SECRET:please-set-this-in-your-env-file-min-32-chars}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+logging:
+  level:
+    com.platform.ai: DEBUG
