@@ -10,6 +10,16 @@ buildNumber.properties
 .mvn/timing.properties
 .mvn/wrapper/maven-wrapper.jar
 
+
+
+# Docker
+docker-compose.override.yml
+
+# Grafana provisioning secrets
+grafana/grafana.ini
+
+
+
 # Gradle
 build/
 gradle-app.setting
@@ -64,6 +74,12 @@ hs_err_pid*
 # Spring Boot
 application-local.properties
 application-dev.properties
+application-test.properties
+
+
+# JWT / secrets (extra safety)
+*.pem
+*.key
 
 # Logs
 *.log
@@ -99,3 +115,7 @@ Thumbs.db
 .settings
 .springBeans
 .sts4-cache
+
+# k6 load test results
+k6/results/
+*.json.gz

@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+    ╔══════════════════════════════════════════════════════════╗
+    ║  SPRING BOOT PARENT — The BOM (Bill of Materials)       ║
+    ║  This is NOT your project. It's Spring's parent POM.    ║
+    ║  It manages 200+ dependency versions for you.           ║
+    ║  You inherit it so you NEVER have to write              ║
+    ║  <version> tags on Spring libs.                         ║
+    ╚══════════════════════════════════════════════════════════╝
+    -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.0</version>
+        <relativePath/> <!-- tells Maven: don't look locally, fetch from Maven Central -->
+    </parent>
+
+    <!--
+    ╔══════════════════════════════════════════════════════════╗
+    ║  YOUR PROJECT IDENTITY                                   ║
+    ║  groupId   = your "company" / team namespace            ║
+    ║  artifactId = the root project name                     ║
+    ║  version    = your app version (SNAPSHOT = in dev)      ║
+    ║  packaging  = "pom" means this is a PARENT, not a jar   ║
+    ╚══════════════════════════════════════════════════════════╝
+    -->
+    <groupId>com.platform</groupId>
+    <artifactId>investors-platform</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>  <!-- CRITICAL: must be "pom" for parent modules -->
+
+    <name>Investors Platform — Parent</name>
+    <description>Java Microservices Investment Platform</description>
+
+    <!--
+    ╔══════════════════════════════════════════════════════════╗
+    ║  CHILD MODULES                                          ║
+    ║  Maven will look for a folder with this name and        ║
+    ║  expects a pom.xml inside it.                           ║
+    ║  Order matters for build: dispatcher depends on         ║
+    ║  nothing, so it can go first.                           ║
+    ╚══════════════════════════════════════════════════════════╝
+    -->
+    <modules>
+        <module>dispatcher</module>
+        <module>auth-service</module>
+        <module>idea-service</module>
+        <module>deal-service</module>
+        <module>ai-service</module>
+    </modules>
+
+    <!--
+    ╔══════════════════════════════════════════════════════════╗
+    ║  GLOBAL PROPERTIES                                      ║
+    ║  Set once here → all child modules inherit these.       ║
+    ║  java.version tells the compiler plugin which Java to   ║
+    ║  target. 21 = latest LTS as of 2024.                    ║
+    ╚══════════════════════════════════════════════════════════╝
+    -->
+    <properties>
+        <java.version>21</java.version>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Dependency versions we manage centrally -->
+        <jjwt.version>0.12.3</jjwt.version>
+        <testcontainers.version>1.19.3</testcontainers.version>
+        <logstash.version>7.4</logstash.version>
+        <resilience4j.version>2.1.0</resilience4j.version>
+    </properties>
+
+    <!--
+    ╔══════════════════════════════════════════════════════════╗
+    ║  DEPENDENCY MANAGEMENT                                   ║
+    ║  This section does NOT add dependencies to anyone.      ║
+    ║  It just declares VERSIONS in one place.                ║
+    ║  Children can then use a dep WITHOUT a <version> tag    ║
+    ║  and they'll get the version declared here.             ║
+    ╚══════════════════════════════════════════════════════════╝
+    -->
+    <dependencyManagement>
+        <dependencies>
+
+            <!-- JWT library — used in dispatcher + auth-service -->
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-api</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-impl</artifactId>
+                <version>${jjwt.version}</version>
+                <scope>runtime</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-jackson</artifactId>
+                <version>${jjwt.version}</version>
+                <scope>runtime</scope>
+            </dependency>
+
+            <!-- Testcontainers (for spinning up real MongoDB/Redis in tests) -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- JSON structured logging -->
+            <dependency>
+                <groupId>net.logstash.logback</groupId>
+                <artifactId>logstash-logback-encoder</artifactId>
+                <version>${logstash.version}</version>
+            </dependency>
+
+            <!-- Circuit breaker / retry (used in dispatcher) -->
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-spring-boot3</artifactId>
+                <version>${resilience4j.version}</version>
+            </dependency>
+
+        </dependencies>
+    </dependencyManagement>
+
+    <!--
+    ╔══════════════════════════════════════════════════════════╗
+    ║  COMMON DEPENDENCIES                                     ║
+    ║  These ARE added to every single child module.          ║
+    ║  Only put things that 100% of services need.            ║
+    ╚══════════════════════════════════════════════════════════╝
+    -->
+    <dependencies>
+        <!-- Every service needs this for testing -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+            <!-- scope=test means: only available during `mvn test`, not in final jar -->
+        </dependency>
+
+        <!-- Lombok: reduces boilerplate (@Getter, @Setter, @Builder, etc) -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
+
+    <!--
+    ╔══════════════════════════════════════════════════════════╗
+    ║  BUILD PLUGINS                                          ║
+    ║  spring-boot-maven-plugin: lets you run                 ║
+    ║  `mvn spring-boot:run` and creates executable fat JARs  ║
+    ╚══════════════════════════════════════════════════════════╝
+    -->
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <configuration>
+                        <excludes>
+                            <exclude>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                            </exclude>
+                        </excludes>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+
+</project>

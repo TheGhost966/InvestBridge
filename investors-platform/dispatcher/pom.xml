@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+    ╔══════════════════════════════════════════════════════════╗
+    ║  PARENT REFERENCE                                       ║
+    ║  This links us back to the root pom.xml.               ║
+    ║  ../pom.xml means: go one folder up, find pom.xml.     ║
+    ║  We inherit: Java 21, Spring Boot BOM, Lombok, Tests.  ║
+    ╚══════════════════════════════════════════════════════════╝
+    -->
+    <parent>
+        <groupId>com.platform</groupId>
+        <artifactId>investors-platform</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <!--
+    ╔══════════════════════════════════════════════════════════╗
+    ║  MODULE IDENTITY                                        ║
+    ║  groupId is inherited from parent — don't repeat it.   ║
+    ║  packaging defaults to "jar" — this becomes a runnable  ║
+    ║  Spring Boot fat JAR.                                   ║
+    ╚══════════════════════════════════════════════════════════╝
+    -->
+    <artifactId>dispatcher</artifactId>
+    <packaging>jar</packaging>
+    <n>Dispatcher Service</n>
+    <description>
+        Public-facing gateway. Handles: JWT validation, role-based authorization,
+        request routing to internal services, Prometheus metrics, structured logging.
+    </description>
+
+    <dependencies>
+
+        <!--
+        ── WEB ───────────────────────────────────────────────
+        Embeds Tomcat, gives us @RestController, @RequestMapping,
+        HttpClient, etc. Every service needs this.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!--
+        ── SECURITY ──────────────────────────────────────────
+        Dispatcher needs this to build the JWT validation filter
+        and the SecurityFilterChain (permit /auth/**, block others).
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!--
+        ── MONGODB ───────────────────────────────────────────
+        Dispatcher uses MongoDB for: audit logs of all requests,
+        storing route configuration (optional).
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-mongodb</artifactId>
+        </dependency>
+
+        <!--
+        ── REDIS ─────────────────────────────────────────────
+        Used to check the JWT blacklist (logged-out tokens).
+        When auth-service blacklists a token on logout, dispatcher
+        checks Redis before forwarding any request.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <!--
+        ── PROMETHEUS METRICS ────────────────────────────────
+        Exposes /actuator/prometheus endpoint.
+        Grafana scrapes this for RPS, latency, error rate dashboards.
+        -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
+        <!--
+        ── ACTUATOR ──────────────────────────────────────────
+        Exposes /actuator/health (for Docker healthcheck),
+        /actuator/prometheus, /actuator/metrics endpoints.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!--
+        ── JWT ───────────────────────────────────────────────
+        Dispatcher validates JWT signatures on every request.
+        Version is managed in root pom.xml — no <version> needed.
+        3 artifacts needed: api (compile), impl + jackson (runtime).
+        -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+        </dependency>
+
+        <!--
+        ── STRUCTURED LOGGING ────────────────────────────────
+        Outputs logs as JSON with correlation_id field.
+        Without this, logs are plain text — hard to search.
+        -->
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+        </dependency>
+
+        <!--
+        ── CIRCUIT BREAKER / RETRY ───────────────────────────
+        If auth-service is down, dispatcher retries 3x then returns
+        503. Prevents cascade failures.
+        -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot3</artifactId>
+        </dependency>
+
+        <!--
+        ── TEST DEPENDENCIES ─────────────────────────────────
+        MockMvc: test HTTP endpoints without starting a real server.
+        Testcontainers: spins up real Redis in Docker during tests.
+        -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
