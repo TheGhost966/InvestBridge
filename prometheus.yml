@@ -1,0 +1,40 @@
+global:
+  scrape_interval: 15s      # How often Prometheus checks each service
+  evaluation_interval: 15s  # How often it evaluates alert rules
+
+scrape_configs:
+
+  # Prometheus monitors itself too
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Scrape the Dispatcher
+  - job_name: dispatcher
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['dispatcher:8080']
+
+  # Scrape Auth Service
+  - job_name: auth-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['auth-service:8081']
+
+  # Scrape Idea Service
+  - job_name: idea-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['idea-service:8082']
+
+  # Scrape Deal Service
+  - job_name: deal-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['deal-service:8083']
+
+  # Scrape AI Service (optional)
+  - job_name: ai-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['ai-service:8084']
