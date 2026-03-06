@@ -1,0 +1,38 @@
+# This file is ONLY used during `mvn test`
+# It overrides application.yml for tests
+# Key goal: disable real DB connections so tests run without Docker
+
+spring:
+  # Disable MongoDB auto-configuration during tests
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration
+      - org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+
+  # Fake MongoDB URI (won't be used, just stops startup errors)
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/testdb
+
+# Disable health checks for MongoDB and Redis during tests
+management:
+  health:
+    mongo:
+      enabled: false
+    redis:
+      enabled: false
+  endpoint:
+    health:
+      show-details: never
+
+# Routes config for tests — pointing to localhost (WireMock will intercept)
+routes:
+  auth-service: http://localhost:8081
+  idea-service: http://localhost:8082
+  deal-service: http://localhost:8083
+  ai-service:   http://localhost:8084
+
+jwt:
+  secret: test-secret-key-for-testing-only-32chars!!
