@@ -19,6 +19,8 @@ spring:
 # Disable health checks for MongoDB and Redis during tests
 management:
   health:
+    difault:
+      enabled: false
     mongo:
       enabled: false
     redis:
@@ -26,6 +28,10 @@ management:
   endpoint:
     health:
       show-details: never
+  endpoint:
+    web:
+      exposure:
+        include: health
 
 # Routes config for tests — pointing to localhost (WireMock will intercept)
 routes:

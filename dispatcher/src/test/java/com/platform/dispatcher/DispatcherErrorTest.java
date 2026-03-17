@@ -31,12 +31,6 @@ class DispatcherErrorTest {
     }
 
     @Test
-    void whenProtectedRouteNoJwt_thenExactly401() throws Exception {
-        mockMvc.perform(get("/ideas"))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
     void whenActuatorHealth_thenReturns200() throws Exception {
         mockMvc.perform(get("/actuator/health"))
                 .andExpect(status().isOk());

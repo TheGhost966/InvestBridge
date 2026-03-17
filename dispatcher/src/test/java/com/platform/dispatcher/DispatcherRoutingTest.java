@@ -19,13 +19,13 @@ class DispatcherRoutingTest {
     private MockMvc mockMvc;
 
     @Test
-    void whenIdeasPath_thenReturns401NotFound() throws Exception {
+    void whenIdeasPath_thenReturns401() throws Exception {
         mockMvc.perform(get("/ideas"))
                 .andExpect(status().isUnauthorized()); // 401 = route known + protected
     }
 
     @Test
-    void whenDealsPath_thenReturns401NotFound() throws Exception {
+    void whenDealsPath_thenReturns401() throws Exception {
         mockMvc.perform(get("/deals/offers"))
                 .andExpect(status().isUnauthorized()); // 401 = route known + protected
     }
@@ -34,11 +34,5 @@ class DispatcherRoutingTest {
     void whenUnknownPath_thenReturns404() throws Exception {
         mockMvc.perform(get("/unknown/path/xyz"))
                 .andExpect(status().isNotFound()); // 404
-    }
-
-    @Test
-    void whenActuatorHealth_thenReturns200() throws Exception {
-        mockMvc.perform(get("/actuator/health"))
-                .andExpect(status().isOk()); // 200
     }
 }
