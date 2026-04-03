@@ -4,7 +4,9 @@ import com.platform.deal.domain.*;
 import com.platform.deal.dto.*;
 import com.platform.deal.exception.ResourceNotFoundException;
 import com.platform.deal.repository.*;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -27,34 +29,73 @@ public class DealService {
     }
 
     public InvestorProfile createProfile(String investorId, CreateProfileRequest req) {
-        throw new UnsupportedOperationException("TODO");
+        profileRepo.findByInvestorId(investorId).ifPresent(p -> {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Profile already exists");
+        });
+        InvestorProfile profile = new InvestorProfile();
+        profile.setInvestorId(investorId);
+        profile.setBio(req.getBio());
+        profile.setSectors(req.getSectors());
+        profile.setMinInvestment(req.getMinInvestment());
+        profile.setMaxInvestment(req.getMaxInvestment());
+        return profileRepo.save(profile);
     }
 
     public InvestorProfile getProfile(String investorId) {
-        throw new UnsupportedOperationException("TODO");
+        return profileRepo.findByInvestorId(investorId)
+                .orElseThrow(() -> new ResourceNotFoundException("InvestorProfile", investorId));
     }
 
     public Offer createOffer(String investorId, CreateOfferRequest req) {
-        throw new UnsupportedOperationException("TODO");
+        Offer offer = new Offer();
+        offer.setInvestorId(investorId);
+        offer.setIdeaId(req.getIdeaId());
+        offer.setFounderId(req.getFounderId());
+        offer.setAmount(req.getAmount());
+        offer.setMessage(req.getMessage());
+        offer.setStatus(OfferStatus.PENDING);
+        return offerRepo.save(offer);
     }
 
     public Offer getOffer(String offerId) {
-        throw new UnsupportedOperationException("TODO");
+        return offerRepo.findById(offerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Offer", offerId));
     }
 
     public Offer acceptOffer(String offerId, String founderId) {
-        throw new UnsupportedOperationException("TODO");
+        Offer offer = offerRepo.findById(offerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Offer", offerId));
+        if (!offer.getFounderId().equals(founderId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your offer");
+        }
+        offer.setStatus(OfferStatus.ACCEPTED);
+        offerRepo.save(offer);
+
+        Match match = new Match(offer.getInvestorId(), offer.getFounderId(),
+                                offer.getIdeaId(), offer.getId());
+        matchRepo.save(match);
+        return offer;
     }
 
     public Offer rejectOffer(String offerId, String founderId) {
-        throw new UnsupportedOperationException("TODO");
+        Offer offer = offerRepo.findById(offerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Offer", offerId));
+        if (!offer.getFounderId().equals(founderId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your offer");
+        }
+        offer.setStatus(OfferStatus.REJECTED);
+        return offerRepo.save(offer);
     }
 
     public List<Match> getMatches(String userId, String role) {
-        throw new UnsupportedOperationException("TODO");
+        if ("INVESTOR".equalsIgnoreCase(role)) {
+            return matchRepo.findByInvestorId(userId);
+        }
+        return matchRepo.findByFounderId(userId);
     }
 
     public AbuseReport createReport(String reporterId, AbuseReportRequest req) {
-        throw new UnsupportedOperationException("TODO");
+        AbuseReport report = new AbuseReport(reporterId, req.getTargetId(), req.getReason());
+        return reportRepo.save(report);
     }
 }
