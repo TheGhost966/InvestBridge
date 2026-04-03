@@ -1,0 +1,138 @@
+package com.platform.dispatcher.proxy;
+
+import com.platform.dispatcher.interfaces.MetricsPublisher;
+import com.platform.dispatcher.interfaces.RouteResolver;
+import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.*;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClient;
+
+import java.io.IOException;
+import java.util.Collections;
+
+/**
+ * ProxyController — forwards every incoming request to the correct
+ * internal service based on the URL prefix.
+ *
+ * Routing table:
+ *   /auth/**  → auth-service:8081
+ *   /ideas/** → idea-service:8082
+ *   /deals/** → deal-service:8083
+ *   /ai/**    → ai-service:8084
+ *
+ * Everything else → 404
+ *
+ * The JwtAuthFilter has already validated the JWT before this controller runs.
+ * Route resolution is delegated to RouteResolver (DIP).
+ * Metrics are published via MetricsPublisher (DIP).
+ */
+@RestController
+public class ProxyController {
+
+    private static final Logger log = LoggerFactory.getLogger(ProxyController.class);
+
+    private static final int MAX_RETRIES = 3;
+    private static final long RETRY_BACKOFF_MS = 200;
+
+    private final RouteResolver routeResolver;
+    private final MetricsPublisher metricsPublisher;
+    private final RestClient restClient;
+
+    public ProxyController(RouteResolver routeResolver, MetricsPublisher metricsPublisher) {
+        this.routeResolver    = routeResolver;
+        this.metricsPublisher = metricsPublisher;
+        this.restClient       = RestClient.create();
+    }
+
+    /** Catch-all mapping — handles ALL paths. */
+    @RequestMapping("/**")
+    public ResponseEntity<byte[]> proxy(HttpServletRequest request) throws IOException {
+
+        String path       = request.getRequestURI();
+        String targetBase = routeResolver.resolve(path);
+
+        if (targetBase == null) {
+            log.warn("No route found for path: {}", path);
+            return ResponseEntity.notFound().build();
+        }
+
+        String targetUrl = targetBase + path;
+        String queryString = request.getQueryString();
+        if (queryString != null) {
+            targetUrl += "?" + queryString;
+        }
+
+        log.debug("Proxying {} {} → {}", request.getMethod(), path, targetUrl);
+
+        HttpHeaders headers = new HttpHeaders();
+        Collections.list(request.getHeaderNames()).forEach(headerName ->
+                headers.put(headerName, Collections.list(request.getHeaders(headerName)))
+        );
+
+        byte[] body = request.getInputStream().readAllBytes();
+
+        String route = extractRouteLabel(path);
+        long start   = System.currentTimeMillis();
+
+        ResponseEntity<byte[]> response = forwardWithRetry(
+                request.getMethod(), targetUrl, headers, body, targetBase, MAX_RETRIES);
+
+        long duration = System.currentTimeMillis() - start;
+        metricsPublisher.recordRequest(route, request.getMethod(), response.getStatusCode().value(), duration);
+
+        return response;
+    }
+
+    /**
+     * Forward the request, retrying up to {@code retriesLeft} times on network failure.
+     * Each retry waits RETRY_BACKOFF_MS * (attempt number) before retrying (linear backoff).
+     */
+    private ResponseEntity<byte[]> forwardWithRetry(
+            String method, String targetUrl, HttpHeaders headers, byte[] body,
+            String targetBase, int retriesLeft) {
+
+        try {
+            return restClient
+                    .method(HttpMethod.valueOf(method))
+                    .uri(targetUrl)
+                    .headers(h -> h.addAll(headers))
+                    .body(body)
+                    .retrieve()
+                    .toEntity(byte[].class);
+
+        } catch (ResourceAccessException e) {
+            if (retriesLeft > 0) {
+                int attempt = MAX_RETRIES - retriesLeft + 1;
+                log.warn("Service unavailable (attempt {}): {} — retrying in {}ms",
+                        attempt, targetUrl, RETRY_BACKOFF_MS * attempt);
+                try {
+                    Thread.sleep(RETRY_BACKOFF_MS * attempt);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
+                return forwardWithRetry(method, targetUrl, headers, body, targetBase, retriesLeft - 1);
+            }
+            log.error("Service unavailable after {} retries: {}", MAX_RETRIES, targetUrl);
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(("Service unavailable: " + targetBase).getBytes());
+
+        } catch (Exception e) {
+            log.error("Proxy error for {}: {}", targetUrl, e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                    .body("Bad gateway".getBytes());
+        }
+    }
+
+    /** Derive a short route label from the path for use in metrics tags. */
+    private String extractRouteLabel(String path) {
+        if (path.startsWith("/auth"))  return "auth";
+        if (path.startsWith("/ideas")) return "ideas";
+        if (path.startsWith("/deals")) return "deals";
+        if (path.startsWith("/ai"))    return "ai";
+        return "unknown";
+    }
+}

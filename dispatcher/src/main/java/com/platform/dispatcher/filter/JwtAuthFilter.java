@@ -1,6 +1,6 @@
 package com.platform.dispatcher.filter;
 
-import com.platform.dispatcher.JwtUtil;
+//import com.platform.dispatcher.JwtUtil;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -12,6 +12,8 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import com.platform.dispatcher.interfaces.TokenValidator;
+
 
 import java.io.IOException;
 import java.util.List;
@@ -21,12 +23,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(JwtAuthFilter.class);
 
-    private final JwtUtil jwtUtil;
-
-    public JwtAuthFilter(JwtUtil jwtUtil) {
-        this.jwtUtil = jwtUtil;
+    private final TokenValidator tokenValidator;
+    public JwtAuthFilter(TokenValidator tokenValidator) {
+        this.tokenValidator = tokenValidator;
     }
-
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
@@ -44,8 +44,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String token = authHeader.substring(7);
 
         try {
-            String userId = jwtUtil.extractUserId(token);
-            String role   = jwtUtil.extractRole(token);
+            String userId = tokenValidator.extractUserId(token);
+            String role   = tokenValidator.extractRole(token);
 
             log.debug("JWT valid — userId={} role={} path={}", userId, role, request.getRequestURI());
 
