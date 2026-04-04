@@ -16,6 +16,7 @@ import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Set;
 
 /**
  * ProxyController — forwards every incoming request to the correct
@@ -37,6 +38,13 @@ import java.util.Collections;
 public class ProxyController {
 
     private static final Logger log = LoggerFactory.getLogger(ProxyController.class);
+
+    // Hop-by-hop headers must not be forwarded to downstream services
+    private static final Set<String> HOP_BY_HOP = Set.of(
+            "transfer-encoding", "connection", "keep-alive",
+            "proxy-authenticate", "proxy-authorization",
+            "te", "trailers", "upgrade", "content-length"
+    );
 
     private static final int MAX_RETRIES = 3;
     private static final long RETRY_BACKOFF_MS = 200;
@@ -71,11 +79,13 @@ public class ProxyController {
 
         log.debug("Proxying {} {} → {}", request.getMethod(), path, targetUrl);
 
-        // Copy all inbound headers (includes X-Correlation-Id injected by CorrelationIdFilter)
+        // Copy inbound headers, skipping hop-by-hop headers that must not be forwarded
         HttpHeaders headers = new HttpHeaders();
-        Collections.list(request.getHeaderNames()).forEach(name ->
-                headers.put(name, Collections.list(request.getHeaders(name)))
-        );
+        Collections.list(request.getHeaderNames()).forEach(name -> {
+            if (!HOP_BY_HOP.contains(name.toLowerCase())) {
+                headers.put(name, Collections.list(request.getHeaders(name)));
+            }
+        });
 
         // Mark request as internal so downstream InternalRequestFilters let it through
         headers.set("X-Internal-Request", "true");
