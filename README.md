@@ -1,6 +1,6 @@
-# Java Microservices Investment Platform
+# InvestBridge — Java Microservices Investment Platform
 
-> **A cloud-native investment matchmaking platform** connecting founders, investors, and admins through a secure, observable microservices architecture.
+> **A cloud-native investment matchmaking platform** connecting startup founders, investors, and admins through a secure, observable, fully-tested microservices architecture built with Java 21 + Spring Boot 3.
 
 ---
 
@@ -9,348 +9,433 @@
 1. [Problem Statement](#1-problem-statement)
 2. [Architecture Overview](#2-architecture-overview)
 3. [Microservices & Database Isolation](#3-microservices--database-isolation)
-4. [Dispatcher — TDD Proof](#4-dispatcher--tdd-proof)
+4. [TDD Proof — All Services](#4-tdd-proof--all-services)
 5. [REST Maturity Model (RMM Level 2)](#5-rest-maturity-model-rmm-level-2)
-6. [Running the Project](#6-running-the-project)
-7. [Monitoring & Observability](#7-monitoring--observability)
-8. [Load Testing Results](#8-load-testing-results)
-9. [Team & Contributions](#10-team--contributions)
+6. [Security & Network Isolation](#6-security--network-isolation)
+7. [Observability](#7-observability)
+8. [Running the Project](#8-running-the-project)
+9. [Load Testing](#9-load-testing)
+10. [Team & Contributions](#10-team--contributions)
 
 ---
 
 ## 1. Problem Statement
 
-<!-- TODO: Fill in before submission -->
-> Describe the real-world problem. Who are the users (founders, investors, admins)? What pain point does this platform solve? Keep it to 3–5 sentences.
+Early-stage startups struggle to connect with the right investors — cold emails get ignored, networking events are inaccessible, and there is no structured way to present a verified idea to a pool of serious investors.
 
-**Target Users:**
-- **Founders** — submit and manage startup ideas
-- **Investors** — browse verified ideas and make offers
-- **Admins** — verify ideas, manage users, view platform health
+**InvestBridge** solves this by providing a structured platform where:
+- **Founders** submit and manage their startup ideas through a gated workflow (DRAFT → VERIFIED)
+- **Investors** browse only admin-verified ideas and make formal investment offers
+- **Admins** act as gatekeepers — verifying ideas and monitoring platform health
+- All interactions are **audited**, **authenticated** via JWT, and **observable** through Prometheus + Grafana
 
 ---
 
 ## 2. Architecture Overview
 
-<!-- TODO: Replace with final Mermaid diagram -->
-
-The platform uses a **dispatcher-first microservices pattern**. All client traffic enters through a single public gateway (the Dispatcher on port `8080`), which handles JWT validation, role-based authorization, and request proxying to internal services. No internal service is directly reachable from outside the Docker network.
+All client traffic enters through a single public gateway — the **Dispatcher** on port `8080`. It validates JWTs, enforces role-based access, and proxies requests to internal services. No internal service is reachable from the internet.
 
 ```mermaid
 graph TD
     Client["🌐 Client / Internet"]
-    D["🚦 Dispatcher\n:8080 (public)"]
-    A["🔐 Auth Service\n:8081"]
-    I["💡 Idea Service\n:8082"]
-    De["🤝 Deal Service\n:8083"]
-    AI["🤖 AI Service\n:8084 (optional)"]
+    D["🚦 Dispatcher :8080\n(JWT validation, routing, metrics)"]
+    A["🔐 Auth Service :8081\n(register, login, JWT issue)"]
+    I["💡 Idea Service :8082\n(CRUD, status transitions)"]
+    De["🤝 Deal Service :8083\n(offers, matches, reports)"]
+    AI["🤖 AI Service :8084\n(optional)"]
     AM["🍃 Auth MongoDB"]
     IM["🍃 Idea MongoDB"]
     DM["🍃 Deal MongoDB"]
-    R["⚡ Redis"]
-    P["📊 Prometheus"]
-    G["📈 Grafana\n:3000"]
+    R["⚡ Redis\n(JWT blacklist)"]
+    P["📊 Prometheus :9090"]
+    G["📈 Grafana :3001"]
 
     Client --> D
-    D --> A
-    D --> I
-    D --> De
-    D --> AI
+    D -->|X-Internal-Request: true| A
+    D -->|X-Internal-Request: true| I
+    D -->|X-Internal-Request: true| De
+    D -->|X-Internal-Request: true| AI
     A --> AM
+    A --> R
     I --> IM
     De --> DM
-    A --> R
     D --> P
+    A --> P
+    I --> P
+    De --> P
     P --> G
 ```
 
-### Sequence Diagram — Login Flow
+### Sequence — Investor Makes an Offer
 
 ```mermaid
 sequenceDiagram
-    participant C as Client
-    participant D as Dispatcher
-    participant A as Auth Service
-    participant M as MongoDB
-
-    C->>D: POST /auth/login {email, password}
-    D->>D: Validate route → /auth/**
-    D->>A: Forward + X-Internal-Request: true
-    A->>M: Find user by email
-    M-->>A: User document
-    A->>A: BCrypt verify password
-    A-->>D: 200 OK {token: "eyJ..."}
-    D-->>C: 200 OK {token: "eyJ..."}
-```
-
-### Sequence Diagram — Create Idea Flow
-
-```mermaid
-sequenceDiagram
-    participant C as Client
+    participant C as Client (Investor)
     participant D as Dispatcher
     participant I as Idea Service
-    participant M as MongoDB
+    participant De as Deal Service
+    participant M as Deal MongoDB
 
-    C->>D: POST /ideas {title, summary, ...} + Bearer JWT
-    D->>D: Validate JWT → role=FOUNDER
-    D->>I: Forward + X-Internal-Request: true
-    I->>M: Save Idea (status=DRAFT)
-    M-->>I: Saved document
-    I-->>D: 201 Created {id, status: "DRAFT"}
-    D-->>C: 201 Created
+    C->>D: POST /deals/offers {ideaId, amount} + Bearer JWT
+    D->>D: Validate JWT → role=INVESTOR
+    D->>D: Generate X-Correlation-Id UUID
+    D->>De: Forward + X-Internal-Request: true + X-Correlation-Id
+    De->>De: InternalRequestFilter passes ✓
+    De->>M: Save Offer (status=PENDING)
+    M-->>De: Saved document
+    De-->>D: 201 Created {id, status: "PENDING"}
+    D-->>C: 201 Created {id, status: "PENDING"}
 ```
 
 ---
 
 ## 3. Microservices & Database Isolation
 
-Each service owns its own MongoDB instance. No service queries another service's database — all cross-service data needs go through the Dispatcher.
+Each service owns its own MongoDB — **no service queries another service's database**. Cross-service data flows only through the Dispatcher.
 
-| Service | Port (internal) | Database | Responsibility |
+| Service | Port | Database | Key Responsibility |
 |---|---|---|---|
-| Dispatcher | 8080 | dispatcher-mongo | Routing, JWT validation, metrics |
-| Auth Service | 8081 | auth-mongo | Register, login, logout, token management |
-| Idea Service | 8082 | idea-mongo | Idea CRUD, status transitions, filtering |
-| Deal Service | 8083 | deal-mongo | Offers, matches, abuse reports |
-| AI Service | 8084 | — (MongoDB cache) | Idea feedback, investor matching (optional) |
+| **Dispatcher** | `8080` (public) | dispatcher-mongo | JWT validation, routing, retry policy, metrics |
+| **Auth Service** | `8081` (internal) | auth-mongo | Register, login, logout, BCrypt, JWT issuance |
+| **Idea Service** | `8082` (internal) | idea-mongo | Idea CRUD, DRAFT→VERIFIED workflow, role filtering |
+| **Deal Service** | `8083` (internal) | deal-mongo | Investor profiles, offers, match creation, abuse reports |
+| **AI Service** | `8084` (internal) | — | Idea analysis, investor matching (optional) |
 
 ### Network Isolation
 
 ```mermaid
 flowchart LR
-    subgraph public_net
+    subgraph public_net["public_net (exposed)"]
         D["🚦 Dispatcher :8080"]
     end
-    subgraph internal_net
-        A["🔐 Auth Service"]
-        I["💡 Idea Service"]
-        De["🤝 Deal Service"]
+    subgraph internal_net["internal_net (private)"]
+        A["Auth Service"]
+        I["Idea Service"]
+        De["Deal Service"]
         AM["Auth Mongo"]
         IM["Idea Mongo"]
         DM["Deal Mongo"]
         R["Redis"]
+        P["Prometheus"]
+        G["Grafana"]
     end
     Internet["🌐 Internet"] --> D
     D --> A & I & De
     A --> AM & R
     I --> IM
     De --> DM
+    D --> P
+    P --> G
 ```
 
-> **Key rule:** All internal services reject any request missing the `X-Internal-Request: true` header — ensuring only the Dispatcher can call them.
+> **Enforcement:** Every internal service runs an `InternalRequestFilter`. Any request missing the `X-Internal-Request: true` header is immediately rejected with `403 Forbidden` — even with a valid JWT.
 
 ---
 
-## 4. Dispatcher — TDD Proof
+## 4. TDD Proof — All Services
 
-The Dispatcher was built strictly following **Red → Green → Refactor** TDD cycles. Failing tests were committed before any implementation.
+The entire platform was built following strict **Red → Green (→ Refactor)** TDD cycles. Failing tests were always committed before any implementation.
 
 ### Commit Timeline
 
-<!-- TODO: Replace with actual git log output before submission -->
-<!-- Run: git log --oneline --author="<your-name>" | grep -E "test:|feat:|refactor:" -->
-
 ```
-abc1234  test: add routing test skeletons (RED)         ← failing tests committed first
-def5678  test: add authz and error handling tests (RED)
-ghi9012  feat: dispatcher routing + authz GREEN
-jkl3456  refactor: extract interfaces, add retry policy
-```
-
-### Test Results
-
-<!-- TODO: Paste output of `mvn test` from dispatcher module -->
-
-```
-[INFO] Tests run: XX, Failures: 0, Errors: 0, Skipped: 0
+e308d04  test: add dispatcher routing, authz and error handling tests (RED - 5 failing)   [Hamza AlHalabi]
+320aaf5  GREEN test passed successfully 0 failure!                                          [Hamza AlHalabi]
+e62bad2  refactor: extract interfaces, fix ProxyController path, add retry policy           [Hamza AlHalabi]
+25014b0  test: add auth-service register, login, logout and /auth/me tests (RED - 11 failing) [Hamza AlHalabi]
+1dbb480  feat: auth-service GREEN - all passing                                             [Hamza AlHalabi]
+37614e5  test: add idea-service create, read, workflow tests (RED - 14 failing)             [EMAD-BME]
+9e4713c  feat: idea-service GREEN - 18/18 passing                                          [EMAD-BME]
+867722f  test(deal-service): RED phase — domain, stubs, and failing tests                  [EMAD-BME]
+3b170e7  feat(deal-service): GREEN phase — full implementation passing all tests            [EMAD-BME]
 ```
 
-| Test Class | Tests | Status |
-|---|---|---|
-| `DispatcherRoutingTest` | `whenAuthPath_thenRoutesToAuthService` | ✅ |
-| `DispatcherRoutingTest` | `whenIdeasPath_thenRoutesToIdeaService` | ✅ |
-| `DispatcherAuthzTest` | `whenNoJwt_thenReturns401` | ✅ |
-| `DispatcherAuthzTest` | `whenWrongRole_thenReturns403` | ✅ |
-| `DispatcherErrorTest` | `whenServiceDown_thenReturns503` | ✅ |
-| `DispatcherErrorTest` | `whenBadUrl_thenReturns404` | ✅ |
+### Test Results — All Services
+
+| Service | Test Class | Tests | Result |
+|---|---|---|---|
+| **Dispatcher** | `DispatcherRoutingTest` | 3 | ✅ GREEN |
+| **Dispatcher** | `DispatcherAuthzTest` | 7 | ✅ GREEN |
+| **Dispatcher** | `DispatcherErrorTest` | 4 | ✅ GREEN |
+| **Auth Service** | `AuthRegisterTest` | 5 | ✅ GREEN |
+| **Auth Service** | `AuthLoginTest` | 4 | ✅ GREEN |
+| **Auth Service** | `AuthMeTest` | 5 | ✅ GREEN |
+| **Idea Service** | `IdeaCreateTest` | 4 | ✅ GREEN |
+| **Idea Service** | `IdeaReadTest` | 6 | ✅ GREEN |
+| **Idea Service** | `IdeaWorkflowTest` | 8 | ✅ GREEN |
+| **Deal Service** | `DealProfileTest` | 5 | ✅ GREEN |
+| **Deal Service** | `DealOfferTest` | 8 | ✅ GREEN |
+| **Deal Service** | `DealMatchReportTest` | 7 | ✅ GREEN |
+| | **Total** | **66** | **✅ 0 failures** |
+
+```
+[INFO] Tests run: 14, Failures: 0, Errors: 0, Skipped: 0  ← dispatcher
+[INFO] Tests run: 14, Failures: 0, Errors: 0, Skipped: 0  ← auth-service
+[INFO] Tests run: 18, Failures: 0, Errors: 0, Skipped: 0  ← idea-service
+[INFO] Tests run: 20, Failures: 0, Errors: 0, Skipped: 0  ← deal-service
+[INFO] BUILD SUCCESS
+```
+
+### TDD Pattern Used
+
+Every service followed this exact cycle:
+
+```
+1. Write failing test  →  mvn test  →  RED  ← committed here
+2. Write minimal implementation
+3. mvn test  →  GREEN  ← committed here
+4. Refactor (dispatcher only) → mvn test → still GREEN ← committed
+```
+
+**Test infrastructure** (same pattern across all services):
+- `@SpringBootTest + @AutoConfigureMockMvc + @ActiveProfiles("test")`
+- `application-test.yml` excludes MongoDB/Redis auto-config
+- `@MockBean` for all repositories → no real database needed
+- `MockMvc` for HTTP assertions
 
 ---
 
 ## 5. REST Maturity Model (RMM Level 2)
 
-All endpoints use **nouns** (not verbs), proper **HTTP methods**, and meaningful **status codes** — satisfying RMM Level 2.
+All endpoints use **resource nouns**, correct **HTTP verbs**, and meaningful **status codes** — satisfying Richardson Maturity Model Level 2.
 
-### Auth Service
+### Auth Service (`/auth/**`)
 
-| Endpoint | Method | Success | Error | Description |
+| Endpoint | Method | Success | Error Codes | Notes |
 |---|---|---|---|---|
-| `/auth/register` | `POST` | `201 Created` | `409 Conflict` | Register new user |
-| `/auth/login` | `POST` | `200 OK` | `401 Unauthorized` | Login + receive JWT |
-| `/auth/logout` | `POST` | `200 OK` | `401` | Blacklist token in Redis |
-| `/auth/me` | `GET` | `200 OK` | `401` | Get own profile from JWT |
+| `/auth/register` | `POST` | `201 Created` | `409 Conflict` | Duplicate email |
+| `/auth/login` | `POST` | `200 OK` | `401 Unauthorized` | Wrong credentials |
+| `/auth/logout` | `POST` | `200 OK` | `401` | Blacklists token in Redis |
+| `/auth/me` | `GET` | `200 OK` | `401`, `403` | Reads from forwarded JWT headers |
 
-### Idea Service
+### Idea Service (`/ideas/**`)
 
-| Endpoint | Method | Success | Error | Description |
+| Endpoint | Method | Success | Error Codes | Notes |
 |---|---|---|---|---|
-| `/ideas` | `POST` | `201 Created` | `403 Forbidden` | Create idea (FOUNDER) |
-| `/ideas` | `GET` | `200 OK` | `401` | List ideas (role-filtered) |
-| `/ideas/{id}` | `GET` | `200 OK` | `404 Not Found` | Get idea by ID |
-| `/ideas/{id}` | `PUT` | `200 OK` | `403`, `404` | Update own DRAFT (FOUNDER) |
-| `/ideas/{id}` | `DELETE` | `204 No Content` | `403`, `404` | Delete own DRAFT (FOUNDER) |
-| `/ideas/{id}/verify` | `PATCH` | `200 OK` | `403` | Verify idea (ADMIN) |
+| `/ideas` | `POST` | `201 Created` | `400`, `403` | FOUNDER only |
+| `/ideas` | `GET` | `200 OK` | `401` | INVESTOR→verified only, FOUNDER→own, ADMIN→all |
+| `/ideas/{id}` | `GET` | `200 OK` | `404` | Any authenticated user |
+| `/ideas/{id}` | `PUT` | `200 OK` | `403`, `404` | Owner + status=DRAFT |
+| `/ideas/{id}` | `DELETE` | `204 No Content` | `403`, `404` | Owner + status=DRAFT |
+| `/ideas/{id}/verify` | `PATCH` | `200 OK` | `403` | ADMIN only → sets VERIFIED |
+| `/ideas/{id}/reject` | `PATCH` | `200 OK` | `403` | ADMIN only → sets REJECTED |
 
-### Deal Service
+### Deal Service (`/deals/**`)
 
-| Endpoint | Method | Success | Error | Description |
+| Endpoint | Method | Success | Error Codes | Notes |
 |---|---|---|---|---|
-| `/deals/profiles` | `POST` | `201 Created` | `403` | Create investor profile |
-| `/deals/offers` | `POST` | `201 Created` | `403` | Make offer (INVESTOR) |
-| `/deals/offers/{id}` | `GET` | `200 OK` | `404` | Get offer details |
-| `/deals/offers/{id}/accept` | `PATCH` | `200 OK` | `403`, `404` | Accept offer (FOUNDER) |
-| `/deals/matches` | `GET` | `200 OK` | `401` | List matches for user |
-| `/deals/reports` | `POST` | `201 Created` | `401` | Report abuse |
+| `/deals/profiles` | `POST` | `201 Created` | `409 Conflict` | INVESTOR only, one per user |
+| `/deals/profiles/me` | `GET` | `200 OK` | `404` | Own profile |
+| `/deals/offers` | `POST` | `201 Created` | `400` | INVESTOR only |
+| `/deals/offers/{id}` | `GET` | `200 OK` | `404` | |
+| `/deals/offers/{id}/accept` | `PATCH` | `200 OK` | `403`, `404` | FOUNDER only; creates Match |
+| `/deals/offers/{id}/reject` | `PATCH` | `200 OK` | `403`, `404` | FOUNDER only |
+| `/deals/matches` | `GET` | `200 OK` | `401` | Role-aware: INVESTOR or FOUNDER |
+| `/deals/reports` | `POST` | `201 Created` | `400` | Any authenticated user |
 
 ---
 
-## 6. Running the Project
+## 6. Security & Network Isolation
 
-### Prerequisites
+### JWT Flow
 
-- Docker Desktop (v24+)
-- Java 21
-- Maven 3.9+
-
-### Start the Platform (3 commands)
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/<your-org>/investors-platform.git
-cd investors-platform
-
-# 2. Build all services
-mvn clean package -DskipTests
-
-# 3. Start everything
-docker-compose up --build
+```
+Client  →  Dispatcher  →  validates JWT (HS256, jjwt 0.12.3)
+                       →  extracts userId + role
+                       →  injects X-User-Id, X-User-Role headers
+                       →  forwards to internal service
 ```
 
-### Verify Services Are Running
+- Tokens are **stateless** (HS256, 1h expiry)
+- Logout **blacklists** the token in Redis — subsequent requests with that token are rejected
+- Passwords are hashed with **BCrypt** (strength 10)
 
-```bash
-# Check all containers are healthy
-docker-compose ps
+### Role-Based Access (Dispatcher Level)
 
-# Test the dispatcher is reachable
-curl http://localhost:8080/actuator/health
-
-# View Grafana dashboard
-open http://localhost:3000   # admin / admin
-```
-
-### Environment Variables
-
-Copy `.env.example` to `.env` and fill in your values:
-
-```bash
-cp .env.example .env
-```
-
-| Variable | Description | Example |
-|---|---|---|
-| `JWT_SECRET` | HS256 signing secret (min 32 chars) | `your-secret-here` |
-| `OPENAI_API_KEY` | For AI service (optional) | `sk-...` |
-
----
-
-## 7. Monitoring & Observability
-
-### Grafana Dashboards
-
-> **TODO:** Replace placeholders with real screenshots taken during load tests.
-
-| Dashboard | Screenshot |
+| Path | Roles Allowed |
 |---|---|
-| Requests Per Second (per route) | *(screenshot here)* |
-| Latency p50 / p95 / p99 | *(screenshot here)* |
-| Error Rate (4xx vs 5xx) | *(screenshot here)* |
-| Service Health (up/down) | *(screenshot here)* |
+| `/auth/**` | Public (no JWT required) |
+| `GET /ideas`, `GET /deals` | `INVESTOR`, `ADMIN` |
+| `/ideas/**`, `/deals/**`, `/ai/**` | Any authenticated user (fine-grained checks in service) |
 
-**Access Grafana:** `http://localhost:3000` (default: `admin` / `admin`)
+### Retry Policy (Dispatcher)
 
-### Structured Logging
+When a downstream service is unreachable, the Dispatcher retries **3 times** with **linear backoff**:
 
-All services emit JSON logs with a `correlation_id` (trace ID) injected by the Dispatcher. This allows tracing a single request across all service logs.
+```
+Attempt 1 → wait 200ms → Attempt 2 → wait 400ms → Attempt 3 → wait 600ms → 503
+```
+
+### Correlation ID Propagation
+
+Every request gets a `X-Correlation-Id` UUID (generated by the Dispatcher if absent). It flows through all services via HTTP headers and is added to MDC — every log line from every service carries the same ID, enabling end-to-end tracing.
+
+---
+
+## 7. Observability
+
+### Metrics (Prometheus + Grafana)
+
+All services expose `/actuator/prometheus`. Prometheus scrapes every 15s. Grafana auto-provisions the **InvestBridge Platform** dashboard on startup.
+
+| Metric | Source | Description |
+|---|---|---|
+| `dispatcher_requests_total` | Dispatcher (custom) | Request count by route, method, status |
+| `dispatcher_request_duration_ms` | Dispatcher (custom) | Duration histogram by route |
+| `http_server_requests_seconds` | Spring Actuator | Per-endpoint latency histogram |
+| `jvm_memory_used_bytes` | Spring Actuator | Heap/non-heap per service |
+| `process_cpu_usage` | Spring Actuator | CPU per service |
+| `jvm_threads_live_threads` | Spring Actuator | Active threads per service |
+
+**Access Grafana:** `http://localhost:3001` → `admin` / `admin`  
+The **InvestBridge Platform** dashboard loads automatically — no manual import needed.
+
+### Structured JSON Logging
+
+All services emit JSON logs via `logstash-logback-encoder`. Every line includes:
 
 ```json
 {
-  "timestamp": "2025-01-01T12:00:00.000Z",
+  "timestamp": "2026-04-04T12:00:00.000Z",
   "level": "INFO",
-  "service": "idea-service",
+  "service": "deal-service",
   "correlation_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-  "message": "Idea created",
-  "idea_id": "abc123",
-  "founder_id": "user456"
+  "logger": "com.platform.deal.controller.DealController",
+  "thread": "http-nio-8083-exec-3",
+  "message": "Offer accepted — offerId=off1 founderId=founder1"
 }
 ```
 
 ---
 
-## 8. Load Testing Results
+## 8. Running the Project
 
-Load tests run with **k6** against the Dispatcher (`http://localhost:8080`).
+### Prerequisites
 
-### Test Scenarios
+| Tool | Version |
+|---|---|
+| Docker Desktop | v24+ |
+| Java | 21 |
+| Maven | 3.9+ |
+| k6 *(load tests only)* | latest |
 
-| Scenario | Users | Duration | Description |
+### Start the Full Stack
+
+```bash
+# 1. Clone
+git clone https://github.com/TheGhost966/InvestBridge.git
+cd InvestBridge
+
+# 2. Set JWT secret (required)
+echo "JWT_SECRET=this-is-a-32-character-secret-key" > .env
+
+# 3. Build + start everything
+docker-compose up --build -d
+
+# 4. Verify all containers are healthy
+docker-compose ps
+```
+
+### Verify Services
+
+```bash
+# Dispatcher health
+curl http://localhost:8080/actuator/health
+
+# Register a founder
+curl -X POST http://localhost:8080/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"founder@test.com","password":"Test1234!","role":"FOUNDER"}'
+
+# Login
+curl -X POST http://localhost:8080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"founder@test.com","password":"Test1234!"}'
+
+# Open Grafana dashboard
+# http://localhost:3001  (admin / admin)
+```
+
+### Ports
+
+| Service | URL |
+|---|---|
+| Dispatcher (API entry point) | `http://localhost:8080` |
+| Grafana | `http://localhost:3001` |
+| Prometheus | `http://localhost:9090` *(internal — not exposed by default)* |
+
+---
+
+## 9. Load Testing
+
+Load tests target the **Dispatcher** (`http://localhost:8080`) — the only public entry point.
+
+### Test Scripts
+
+| Script | VUs | Duration | What It Tests |
 |---|---|---|---|
-| Spike | 0 → 200 | 30s ramp + 1min hold | Sudden traffic burst |
-| Sustained S | 50 | 5 min | Baseline steady load |
-| Sustained M | 100 | 5 min | Moderate load |
-| Sustained L | 200 | 5 min | High load |
-| Sustained XL | 500 | 5 min | Stress test |
+| `k6/smoke_test.js` | 1 | ~10s | All endpoints reachable, correct status codes |
+| `k6/spike_test.js` | 0 → 50 → 0 | ~50s | Resilience under sudden traffic burst |
+| `k6/sustained_test.js` | 0 → 20 → 0 | ~6 min | Full business flow under steady load |
 
-### Results
-
-<!-- TODO: Fill in after running load tests (Phase 8) -->
-
-| Scenario | Avg Latency | p95 Latency | p99 Latency | Error Rate | Throughput (RPS) |
-|---|---|---|---|---|---|
-| Spike (200 users) | — ms | — ms | — ms | —% | — |
-| Sustained 50 | — ms | — ms | — ms | —% | — |
-| Sustained 100 | — ms | — ms | — ms | —% | — |
-| Sustained 200 | — ms | — ms | — ms | —% | — |
-| Sustained 500 | — ms | — ms | — ms | —% | — |
-
-### Run Load Tests Yourself
+### Running the Tests
 
 ```bash
 # Install k6
-brew install k6   # macOS
+winget install k6           # Windows
+brew install k6             # macOS
 
-# Run sustained test (100 users)
-k6 run k6/sustained-test.js
+# 1. Smoke test first (always)
+k6 run k6/smoke_test.js
 
-# Run spike test
-k6 run k6/spike-test.js
+# 2. Spike test
+k6 run k6/spike_test.js
+
+# 3. Sustained load test (full lifecycle)
+k6 run k6/sustained_test.js
+```
+
+### Performance Thresholds
+
+| Metric | Spike Threshold | Sustained Threshold |
+|---|---|---|
+| `http_req_failed` | < 5% | < 1% |
+| `http_req_duration p(95)` | < 2000ms | < 500ms |
+| `http_req_duration p(99)` | — | < 1000ms |
+| `checks` pass rate | > 95% | > 99% |
+
+### Sustained Test — Business Flow Per VU
+
+Each virtual user executes the complete 8-step investment lifecycle:
+
+```
+1. Register as FOUNDER  →  Login
+2. Register as INVESTOR →  Login
+3. FOUNDER creates Idea
+4. INVESTOR lists verified Ideas
+5. INVESTOR creates investor Profile
+6. INVESTOR makes Offer on Idea
+7. FOUNDER accepts Offer  →  Match created automatically
+8. INVESTOR checks Matches
 ```
 
 ---
 
+## 10. Team & Contributions
 
-## 9. Team & Contributions
-
-| Member | GitHub | Key Responsibilities |
+| Member | GitHub | Key Contributions |
 |---|---|---|
-| <!-- Hamza Al Halabi --> | @<!-- handle --> | <!-- e.g. Dispatcher, TDD, Docker,Idea Service, Observability --> |
-| <!-- Emad Al Abdul Rahman --> | @<!-- handle --> | <!-- e.g. Auth Service, Security, Deal Service, Load Testing --> |
+| **Hamza AlHalabi** | [@TheGhost966](https://github.com/TheGhost966) | Project setup, Dispatcher (TDD RED/GREEN/Refactor), Auth Service (TDD), Docker + docker-compose, Prometheus config, Dockerfiles |
+| **Emad** | [@EMAD-BME](https://github.com/EMAD-BME) | Idea Service (TDD RED/GREEN), Deal Service (TDD RED/GREEN), Observability (correlation IDs, JSON logging), Grafana dashboards, Load Testing (k6) |
 
-> **Commit parity:** All team members have equal commit counts. Verify with:
-> ```bash
-> git shortlog -sn --all
-> ```
+```bash
+# Verify commit distribution
+git shortlog -sn --all
+# 17  Hamza AlHalabi
+#  7  EMAD-BME
+```
 
 ---
 
-*Built for the Java Microservices course — academic project.*
+*Built for the Java Microservices (BSM) Lab — Spring 2026.*  
+*Java 21 · Spring Boot 3.3.1 · MongoDB · Redis · Prometheus · Grafana · k6*
