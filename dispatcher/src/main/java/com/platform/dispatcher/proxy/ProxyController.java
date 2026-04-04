@@ -6,8 +6,11 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.*;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
@@ -68,15 +71,28 @@ public class ProxyController {
 
         log.debug("Proxying {} {} → {}", request.getMethod(), path, targetUrl);
 
+        // Copy all inbound headers (includes X-Correlation-Id injected by CorrelationIdFilter)
         HttpHeaders headers = new HttpHeaders();
-        Collections.list(request.getHeaderNames()).forEach(headerName ->
-                headers.put(headerName, Collections.list(request.getHeaders(headerName)))
+        Collections.list(request.getHeaderNames()).forEach(name ->
+                headers.put(name, Collections.list(request.getHeaders(name)))
         );
 
-        byte[] body = request.getInputStream().readAllBytes();
+        // Mark request as internal so downstream InternalRequestFilters let it through
+        headers.set("X-Internal-Request", "true");
 
+        // Inject authenticated user identity so downstream services can enforce ownership
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof String userId) {
+            headers.set("X-User-Id",   userId);
+            headers.set("X-User-Role", auth.getAuthorities().stream()
+                    .findFirst()
+                    .map(a -> a.getAuthority().replace("ROLE_", ""))
+                    .orElse(""));
+        }
+
+        byte[] body  = request.getInputStream().readAllBytes();
         String route = extractRouteLabel(path);
-        long start   = System.currentTimeMillis();
+        long   start = System.currentTimeMillis();
 
         ResponseEntity<byte[]> response = forwardWithRetry(
                 request.getMethod(), targetUrl, headers, body, targetBase, MAX_RETRIES);
@@ -89,7 +105,10 @@ public class ProxyController {
 
     /**
      * Forward the request, retrying up to {@code retriesLeft} times on network failure.
-     * Each retry waits RETRY_BACKOFF_MS * (attempt number) before retrying (linear backoff).
+     * Each retry waits RETRY_BACKOFF_MS × attempt before retrying (linear backoff).
+     *
+     * 4xx / 5xx responses from downstream services are forwarded as-is — the
+     * dispatcher must never swallow them and replace with a generic Bad Gateway.
      */
     private ResponseEntity<byte[]> forwardWithRetry(
             String method, String targetUrl, HttpHeaders headers, byte[] body,
@@ -103,6 +122,13 @@ public class ProxyController {
                     .body(body)
                     .retrieve()
                     .toEntity(byte[].class);
+
+        } catch (HttpStatusCodeException e) {
+            // Downstream returned 4xx or 5xx — forward it transparently
+            log.debug("Downstream {} for {}", e.getStatusCode(), targetUrl);
+            return ResponseEntity.status(e.getStatusCode())
+                    .headers(e.getResponseHeaders())
+                    .body(e.getResponseBodyAsByteArray());
 
         } catch (ResourceAccessException e) {
             if (retriesLeft > 0) {
