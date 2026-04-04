@@ -135,10 +135,10 @@ export default function (data) {
         const ideaRes = http.post(
             `${BASE_URL}/ideas`,
             JSON.stringify({
-                title:       `Idea by VU${__VU} iter${__ITER}`,
-                description: 'A sustained test idea to validate end-to-end flow',
-                sector:      'Technology',
-                fundingGoal: 75000,
+                title:         `Idea by VU${__VU} iter${__ITER}`,
+                summary:       'A sustained test idea to validate end-to-end flow',
+                market:        'Technology',
+                fundingNeeded: 75000,
             }),
             authParams(founderToken),
         );

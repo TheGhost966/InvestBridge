@@ -114,6 +114,22 @@ public class ProxyController {
     }
 
     /**
+     * Strip hop-by-hop headers from response headers before returning to client.
+     * Spring serialises ResponseEntity<byte[]> and will add its own Transfer-Encoding /
+     * Content-Length, so we must not forward the downstream values.
+     */
+    private HttpHeaders sanitiseResponseHeaders(HttpHeaders source) {
+        if (source == null) return new HttpHeaders();
+        HttpHeaders clean = new HttpHeaders();
+        source.forEach((name, values) -> {
+            if (!HOP_BY_HOP.contains(name.toLowerCase())) {
+                clean.put(name, values);
+            }
+        });
+        return clean;
+    }
+
+    /**
      * Forward the request, retrying up to {@code retriesLeft} times on network failure.
      * Each retry waits RETRY_BACKOFF_MS × attempt before retrying (linear backoff).
      *
@@ -125,7 +141,7 @@ public class ProxyController {
             String targetBase, int retriesLeft) {
 
         try {
-            return restClient
+            ResponseEntity<byte[]> resp = restClient
                     .method(HttpMethod.valueOf(method))
                     .uri(targetUrl)
                     .headers(h -> h.addAll(headers))
@@ -133,11 +149,15 @@ public class ProxyController {
                     .retrieve()
                     .toEntity(byte[].class);
 
+            return ResponseEntity.status(resp.getStatusCode())
+                    .headers(sanitiseResponseHeaders(resp.getHeaders()))
+                    .body(resp.getBody());
+
         } catch (HttpStatusCodeException e) {
             // Downstream returned 4xx or 5xx — forward it transparently
             log.debug("Downstream {} for {}", e.getStatusCode(), targetUrl);
             return ResponseEntity.status(e.getStatusCode())
-                    .headers(e.getResponseHeaders())
+                    .headers(sanitiseResponseHeaders(e.getResponseHeaders()))
                     .body(e.getResponseBodyAsByteArray());
 
         } catch (ResourceAccessException e) {

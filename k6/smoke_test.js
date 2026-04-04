@@ -38,7 +38,7 @@ export default function () {
         );
         check(regRes, {
             'register → 201': (r) => r.status === 201,
-            'register body has id': (r) => JSON.parse(r.body).id !== undefined,
+            'register body has id': (r) => JSON.parse(r.body).userId !== undefined,
         });
 
         const loginRes = http.post(
@@ -94,10 +94,10 @@ export default function () {
         const res = http.post(
             `${BASE_URL}/ideas`,
             JSON.stringify({
-                title:       'Smoke Test Idea',
-                description: 'An idea created during the smoke test',
-                sector:      'Technology',
-                fundingGoal: 50000,
+                title:         'Smoke Test Idea',
+                summary:       'An idea created during the smoke test',
+                market:        'Technology',
+                fundingNeeded: 50000,
             }),
             authParams(founderToken),
         );
