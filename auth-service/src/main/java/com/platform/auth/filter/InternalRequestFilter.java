@@ -18,6 +18,12 @@ public class InternalRequestFilter extends OncePerRequestFilter {
     private static final String HEADER = "X-Internal-Request";
     private static final String EXPECTED = "true";
 
+    /** Prometheus scrapes /actuator/prometheus — let it through without the internal header. */
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        return request.getRequestURI().startsWith("/actuator");
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,

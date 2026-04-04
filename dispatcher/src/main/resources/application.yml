@@ -38,6 +38,9 @@ management:
   endpoint:
     health:
       show-details: always
+      access: unrestricted
+    prometheus:
+      access: unrestricted
   metrics:
     export:
       prometheus:
