@@ -10,7 +10,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
@@ -141,24 +140,22 @@ public class ProxyController {
             String targetBase, int retriesLeft) {
 
         try {
+            // onStatus suppresses RestClient's default behaviour of throwing
+            // HttpClientErrorException / HttpServerErrorException for 4xx/5xx.
+            // Every response — including errors — is returned as a ResponseEntity
+            // so the caller receives the real status code and body, not "Bad gateway".
             ResponseEntity<byte[]> resp = restClient
                     .method(HttpMethod.valueOf(method))
                     .uri(targetUrl)
                     .headers(h -> h.addAll(headers))
                     .body(body)
                     .retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, res) -> { /* forward as-is */ })
                     .toEntity(byte[].class);
 
             return ResponseEntity.status(resp.getStatusCode())
                     .headers(sanitiseResponseHeaders(resp.getHeaders()))
                     .body(resp.getBody());
-
-        } catch (HttpStatusCodeException e) {
-            // Downstream returned 4xx or 5xx — forward it transparently
-            log.debug("Downstream {} for {}", e.getStatusCode(), targetUrl);
-            return ResponseEntity.status(e.getStatusCode())
-                    .headers(sanitiseResponseHeaders(e.getResponseHeaders()))
-                    .body(e.getResponseBodyAsByteArray());
 
         } catch (ResourceAccessException e) {
             if (retriesLeft > 0) {

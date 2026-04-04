@@ -1,12 +1,14 @@
 package com.platform.dispatcher.service;
 
 import com.platform.dispatcher.interfaces.RouteResolver;
+import com.platform.dispatcher.util.PathMatcher;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
  * Resolves an incoming URL path to the base URL of the matching internal service.
  * Route table is configured via application.yml — no hardcoded URLs here.
+ * Prefix extraction is delegated to {@link PathMatcher} (single responsibility).
  */
 @Service
 public class RouteResolverImpl implements RouteResolver {
@@ -29,10 +31,12 @@ public class RouteResolverImpl implements RouteResolver {
 
     @Override
     public String resolve(String path) {
-        if (path.startsWith("/auth/"))                          return authServiceUrl;
-        if (path.startsWith("/ideas/") || path.equals("/ideas")) return ideaServiceUrl;
-        if (path.startsWith("/deals/") || path.equals("/deals")) return dealServiceUrl;
-        if (path.startsWith("/ai/"))                            return aiServiceUrl;
-        return null; // no matching route → caller returns 404
+        return switch (PathMatcher.extractPrefix(path)) {
+            case "auth"  -> authServiceUrl;
+            case "ideas" -> ideaServiceUrl;
+            case "deals" -> dealServiceUrl;
+            case "ai"    -> aiServiceUrl;
+            default      -> null; // no matching route → caller returns 404
+        };
     }
 }

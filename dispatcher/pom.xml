@@ -180,6 +180,14 @@
             <scope>test</scope>
         </dependency>
 
+        <!--
+            Testcontainers Redis: there is no dedicated 'redis' artifact.
+            Redis containers use GenericContainer from the core testcontainers jar,
+            which is already pulled in transitively by testcontainers:junit-jupiter above.
+            Usage in tests:
+              new GenericContainer<>("redis:7-alpine").withExposedPorts(6379)
+        -->
+
     </dependencies>
 
     <build>
