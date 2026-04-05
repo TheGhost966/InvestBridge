@@ -78,20 +78,8 @@
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job=\"dispatcher\"}[2m])) by (le)) * 1000",
-          "legendFormat": "dispatcher p95"
-        },
-        {
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job=\"auth-service\"}[2m])) by (le)) * 1000",
-          "legendFormat": "auth-service p95"
-        },
-        {
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job=\"idea-service\"}[2m])) by (le)) * 1000",
-          "legendFormat": "idea-service p95"
-        },
-        {
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job=\"deal-service\"}[2m])) by (le)) * 1000",
-          "legendFormat": "deal-service p95"
+          "expr": "dispatcher_request_duration_ms_seconds{quantile=\"0.95\"} * 1000",
+          "legendFormat": "{{route}} p95"
         }
       ],
       "fieldConfig": {
@@ -120,20 +108,8 @@
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
         {
-          "expr": "sum(rate(http_server_requests_seconds_count{job=\"dispatcher\",status=~\"5..\"}[1m])) / sum(rate(http_server_requests_seconds_count{job=\"dispatcher\"}[1m]))",
-          "legendFormat": "dispatcher error rate"
-        },
-        {
-          "expr": "sum(rate(http_server_requests_seconds_count{job=\"auth-service\",status=~\"5..\"}[1m])) / sum(rate(http_server_requests_seconds_count{job=\"auth-service\"}[1m]))",
-          "legendFormat": "auth error rate"
-        },
-        {
-          "expr": "sum(rate(http_server_requests_seconds_count{job=\"idea-service\",status=~\"5..\"}[1m])) / sum(rate(http_server_requests_seconds_count{job=\"idea-service\"}[1m]))",
-          "legendFormat": "idea error rate"
-        },
-        {
-          "expr": "sum(rate(http_server_requests_seconds_count{job=\"deal-service\",status=~\"5..\"}[1m])) / sum(rate(http_server_requests_seconds_count{job=\"deal-service\"}[1m]))",
-          "legendFormat": "deal error rate"
+          "expr": "sum(rate(dispatcher_requests_total{status_group=~\"4xx|5xx\"}[2m])) by (route, status_group)",
+          "legendFormat": "{{route}} {{status_group}}"
         }
       ],
       "fieldConfig": {
@@ -219,7 +195,7 @@
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
         {
-          "expr": "sum(rate(dispatcher_request_duration_ms_sum[2m])) by (route) / sum(rate(dispatcher_request_duration_ms_count[2m])) by (route)",
+          "expr": "sum(rate(dispatcher_request_duration_ms_seconds_sum[2m])) by (route) / sum(rate(dispatcher_request_duration_ms_seconds_count[2m])) by (route)",
           "legendFormat": "{{route}} avg"
         }
       ],
