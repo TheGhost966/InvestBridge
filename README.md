@@ -37,18 +37,18 @@ All client traffic enters through a single public gateway — the **Dispatcher**
 
 ```mermaid
 graph TD
-    Client["🌐 Client / Internet"]
-    D["🚦 Dispatcher :8080\n(JWT validation, routing, metrics)"]
-    A["🔐 Auth Service :8081\n(register, login, JWT issue)"]
-    I["💡 Idea Service :8082\n(CRUD, status transitions)"]
-    De["🤝 Deal Service :8083\n(offers, matches, reports)"]
-    AI["🤖 AI Service :8084\n(optional)"]
-    AM["🍃 Auth MongoDB"]
-    IM["🍃 Idea MongoDB"]
-    DM["🍃 Deal MongoDB"]
-    R["⚡ Redis\n(JWT blacklist)"]
-    P["📊 Prometheus :9090"]
-    G["📈 Grafana :3001"]
+    Client["Client / Internet"]
+    D["Dispatcher :8080\n(JWT validation, routing, metrics)"]
+    A["Auth Service :8081\n(register, login, JWT issue)"]
+    I["Idea Service :8082\n(CRUD, status transitions)"]
+    De["Deal Service :8083\n(offers, matches, reports)"]
+    AI["AI Service :8084\n(optional)"]
+    AM["Auth MongoDB"]
+    IM["Idea MongoDB"]
+    DM["Deal MongoDB"]
+    R["Redis\n(JWT blacklist)"]
+    P["Prometheus :9090"]
+    G["Grafana :3001"]
 
     Client --> D
     D -->|X-Internal-Request: true| A
@@ -106,7 +106,7 @@ Each service owns its own MongoDB — **no service queries another service's dat
 ```mermaid
 flowchart LR
     subgraph public_net["public_net (exposed)"]
-        D["🚦 Dispatcher :8080"]
+        D["Dispatcher :8080"]
     end
     subgraph internal_net["internal_net (private)"]
         A["Auth Service"]
@@ -119,7 +119,7 @@ flowchart LR
         P["Prometheus"]
         G["Grafana"]
     end
-    Internet["🌐 Internet"] --> D
+    Internet["Internet"] --> D
     D --> A & I & De
     A --> AM & R
     I --> IM
@@ -154,19 +154,19 @@ e62bad2  refactor: extract interfaces, fix ProxyController path, add retry polic
 
 | Service | Test Class | Tests | Result |
 |---|---|---|---|
-| **Dispatcher** | `DispatcherRoutingTest` | 3 | ✅ GREEN |
-| **Dispatcher** | `DispatcherAuthzTest` | 7 | ✅ GREEN |
-| **Dispatcher** | `DispatcherErrorTest` | 4 | ✅ GREEN |
-| **Auth Service** | `AuthRegisterTest` | 5 | ✅ GREEN |
-| **Auth Service** | `AuthLoginTest` | 4 | ✅ GREEN |
-| **Auth Service** | `AuthMeTest` | 5 | ✅ GREEN |
-| **Idea Service** | `IdeaCreateTest` | 4 | ✅ GREEN |
-| **Idea Service** | `IdeaReadTest` | 6 | ✅ GREEN |
-| **Idea Service** | `IdeaWorkflowTest` | 8 | ✅ GREEN |
-| **Deal Service** | `DealProfileTest` | 5 | ✅ GREEN |
-| **Deal Service** | `DealOfferTest` | 8 | ✅ GREEN |
-| **Deal Service** | `DealMatchReportTest` | 7 | ✅ GREEN |
-| | **Total** | **66** | **✅ 0 failures** |
+| **Dispatcher** | `DispatcherRoutingTest` | 3 | GREEN |
+| **Dispatcher** | `DispatcherAuthzTest` | 7 | GREEN |
+| **Dispatcher** | `DispatcherErrorTest` | 4 | GREEN |
+| **Auth Service** | `AuthRegisterTest` | 5 | GREEN |
+| **Auth Service** | `AuthLoginTest` | 4 | GREEN |
+| **Auth Service** | `AuthMeTest` | 5 | GREEN |
+| **Idea Service** | `IdeaCreateTest` | 4 | GREEN |
+| **Idea Service** | `IdeaReadTest` | 6 | GREEN |
+| **Idea Service** | `IdeaWorkflowTest` | 8 | GREEN |
+| **Deal Service** | `DealProfileTest` | 5 | GREEN |
+| **Deal Service** | `DealOfferTest` | 8 | GREEN |
+| **Deal Service** | `DealMatchReportTest` | 7 | GREEN |
+| | **Total** | **66** | **0 failures** |
 
 ```
 [INFO] Tests run: 14, Failures: 0, Errors: 0, Skipped: 0  ← dispatcher
