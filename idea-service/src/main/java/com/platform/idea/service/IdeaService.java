@@ -56,7 +56,11 @@ public class IdeaService {
     public Idea update(String id, CreateIdeaRequest req, String userId) {
         Idea idea = getById(id);
         requireOwner(idea, userId);
-        requireStatus(idea, IdeaStatus.DRAFT, "Only DRAFT ideas can be updated");
+        // Allow revision of both DRAFT and REJECTED ideas; rejected ideas reset to DRAFT for re-review
+        if (idea.getStatus() != IdeaStatus.DRAFT && idea.getStatus() != IdeaStatus.REJECTED) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Only DRAFT or REJECTED ideas can be updated");
+        }
         idea.setTitle(req.getTitle());
         idea.setSummary(req.getSummary());
         idea.setMarket(req.getMarket());
@@ -64,6 +68,12 @@ public class IdeaService {
         idea.setFundingNeeded(req.getFundingNeeded());
         idea.setLocation(req.getLocation());
         idea.setTags(req.getTags());
+        // Reset rejected idea back to DRAFT so admin re-reviews it
+        if (idea.getStatus() == IdeaStatus.REJECTED) {
+            idea.setStatus(IdeaStatus.DRAFT);
+            idea.setRejectionReason(null);
+            log.info("Idea id={} revised after rejection, reset to DRAFT", id);
+        }
         return ideaRepository.save(idea);
     }
 
