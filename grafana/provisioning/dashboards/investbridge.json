@@ -20,9 +20,17 @@
         "name": "datasource",
         "type": "datasource",
         "pluginId": "prometheus",
+        "query": "prometheus",
         "label": "Datasource",
-        "current": {},
-        "hide": 0
+        "current": {
+          "selected": true,
+          "text": "Prometheus",
+          "value": "investbridge-prometheus"
+        },
+        "hide": 0,
+        "refresh": 1,
+        "multi": false,
+        "includeAll": false
       }
     ]
   },
