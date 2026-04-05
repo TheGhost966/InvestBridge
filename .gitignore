@@ -118,4 +118,4 @@ Thumbs.db
 
 # k6 load test results
 k6/results/
-*.json.gz
+*.json.gz.claude/
