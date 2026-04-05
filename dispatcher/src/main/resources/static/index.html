@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>InvestBridge — API Gateway</title>
+  <style>
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #30363d;
+      --accent:    #58a6ff;
+      --green:     #3fb950;
+      --red:       #f85149;
+      --yellow:    #d29922;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --radius:    10px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      padding: 32px 16px;
+    }
+
+    /* ── Header ── */
+    header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    .badge {
+      display: inline-block;
+      background: #1f3a5f;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-size: 2.8rem;
+      font-weight: 700;
+      letter-spacing: -1px;
+      background: linear-gradient(90deg, #58a6ff, #79c0ff, #a5d6ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      color: var(--muted);
+      margin-top: 8px;
+      font-size: 1rem;
+    }
+
+    /* ── Layout ── */
+    .container { max-width: 1100px; margin: 0 auto; }
+
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    section { margin-bottom: 40px; }
+
+    /* ── Service cards ── */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      transition: border-color .2s, transform .2s;
+    }
+    .card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .card-icon {
+      font-size: 1.4rem;
+    }
+    .card-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+    .card-port {
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+    }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+    .dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+    .dot.red   { background: var(--red); }
+    .dot.checking { background: var(--yellow); animation: pulse 1s infinite; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+
+    .card-desc {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+
+    .card-link {
+      display: inline-block;
+      margin-top: 12px;
+      font-size: 0.78rem;
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .card-link:hover { text-decoration: underline; }
+
+    /* ── Endpoints table ── */
+    .endpoints {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+    th {
+      background: #1c2230;
+      color: var(--muted);
+      font-size: 0.7rem;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      padding: 10px 16px;
+      text-align: left;
+    }
+    td { padding: 10px 16px; border-top: 1px solid var(--border); }
+    tr:hover td { background: #1a2030; }
+
+    .method {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .GET    { background: #0d3a2a; color: #3fb950; }
+    .POST   { background: #1a2f5a; color: #58a6ff; }
+    .PATCH  { background: #3a2a0d; color: #d29922; }
+    .PUT    { background: #3a1a2a; color: #f778ba; }
+    .DELETE { background: #3a0d0d; color: #f85149; }
+
+    .path { font-family: 'Courier New', monospace; color: var(--text); }
+    .role-tag {
+      display: inline-block;
+      background: #21262d;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 0.68rem;
+      padding: 1px 6px;
+      color: var(--muted);
+      margin-right: 3px;
+    }
+
+    /* ── Info bar ── */
+    .info-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+    .info-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      text-align: center;
+    }
+    .info-box .value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .info-box .label {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-top: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    /* ── Arch flow ── */
+    .arch {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      font-size: 0.85rem;
+      line-height: 1.8;
+      font-family: 'Courier New', monospace;
+      color: var(--muted);
+      overflow-x: auto;
+      white-space: pre;
+    }
+    .arch .hl  { color: var(--accent); font-weight: bold; }
+    .arch .ok  { color: var(--green); }
+    .arch .arr { color: var(--yellow); }
+
+    /* ── Buttons ── */
+    .btn-row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 18px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: var(--accent); color: #0d1117; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.75rem;
+      margin-top: 56px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="badge">API Gateway · Port 8080</div>
+    <h1>InvestBridge</h1>
+    <p class="subtitle">Microservices platform connecting startup founders with investors</p>
+  </header>
+
+  <!-- ── Quick stats ── -->
+  <section>
+    <div class="info-bar">
+      <div class="info-box">
+        <div class="value" id="stat-services">5</div>
+        <div class="label">Services</div>
+      </div>
+      <div class="info-box">
+        <div class="value" id="stat-health">—</div>
+        <div class="label">Gateway Health</div>
+      </div>
+      <div class="info-box">
+        <div class="value">JWT</div>
+        <div class="label">Auth Method</div>
+      </div>
+      <div class="info-box">
+        <div class="value">MongoDB</div>
+        <div class="label">Database (×4 isolated)</div>
+      </div>
+      <div class="info-box">
+        <div class="value">k6</div>
+        <div class="label">Load Tested</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Services ── -->
+  <section>
+    <div class="section-title">Internal Services</div>
+    <div class="grid">
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🔐</span>
+          <div>
+            <div class="card-name">Auth Service</div>
+            <div class="card-port">Internal · :8081</div>
+          </div>
+        </div>
+        <div class="status-row">
+          <span class="dot checking" id="dot-auth"></span>
+          <span id="lbl-auth">Checking…</span>
+        </div>
+        <div class="card-desc">JWT issuance, registration, login, logout, token blacklist via Redis.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">💡</span>
+          <div>
+            <div class="card-name">Idea Service</div>
+            <div class="card-port">Internal · :8082</div>
+          </div>
+        </div>
+        <div class="status-row">
+          <span class="dot checking" id="dot-idea"></span>
+          <span id="lbl-idea">Checking…</span>
+        </div>
+        <div class="card-desc">Idea CRUD, DRAFT → VERIFIED workflow, admin review cycle.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🤝</span>
+          <div>
+            <div class="card-name">Deal Service</div>
+            <div class="card-port">Internal · :8083</div>
+          </div>
+        </div>
+        <div class="status-row">
+          <span class="dot checking" id="dot-deal"></span>
+          <span id="lbl-deal">Checking…</span>
+        </div>
+        <div class="card-desc">Investor profiles, offers, match creation on acceptance, abuse reports.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🤖</span>
+          <div>
+            <div class="card-name">AI Service</div>
+            <div class="card-port">Internal · :8084</div>
+          </div>
+        </div>
+        <div class="status-row">
+          <span class="dot checking" id="dot-ai"></span>
+          <span id="lbl-ai">Checking…</span>
+        </div>
+        <div class="card-desc">Idea scoring and investor–founder matchmaking recommendations.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">📊</span>
+          <div>
+            <div class="card-name">Grafana</div>
+            <div class="card-port">Public · :3001</div>
+          </div>
+        </div>
+        <div class="status-row">
+          <span class="dot green"></span>
+          <span>Live Dashboard</span>
+        </div>
+        <div class="card-desc">Real-time Prometheus metrics — request rate, latency, JVM heap, error rate.</div>
+        <a class="card-link" href="http://localhost:3001/d/investbridge-main" target="_blank">
+          ↗ Open Dashboard
+        </a>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── Architecture ── -->
+  <section>
+    <div class="section-title">Request Flow</div>
+    <div class="arch"><span class="hl">  Client / Internet</span>
+        │
+        ▼  port 8080 (only public port)
+  <span class="hl">┌─────────────────────────────────────┐</span>
+  <span class="hl">│         DISPATCHER (API Gateway)    │</span>
+  <span class="hl">│</span>  <span class="ok">✔</span> JWT validation (JwtAuthFilter)     <span class="hl">│</span>
+  <span class="hl">│</span>  <span class="ok">✔</span> Role-based authorization            <span class="hl">│</span>
+  <span class="hl">│</span>  <span class="ok">✔</span> Correlation ID injection            <span class="hl">│</span>
+  <span class="hl">│</span>  <span class="ok">✔</span> Metrics (Prometheus)                <span class="hl">│</span>
+  <span class="hl">│</span>  <span class="ok">✔</span> Retry with backoff (3×)             <span class="hl">│</span>
+  <span class="hl">└────────────┬────────────────────────┘</span>
+               │  X-Internal-Request: true
+        <span class="arr">┌──────┴────────────────┐</span>
+        <span class="arr">▼</span>              <span class="arr">▼</span>            <span class="arr">▼</span>
+   <span class="ok">Auth :8081</span>   <span class="ok">Idea :8082</span>   <span class="ok">Deal :8083</span>
+   <span class="ok">Auth-MongoDB</span>  <span class="ok">Idea-MongoDB</span>  <span class="ok">Deal-MongoDB</span>
+        (each service has its own isolated database)</div>
+  </section>
+
+  <!-- ── Endpoints ── -->
+  <section>
+    <div class="section-title">API Reference</div>
+    <div class="endpoints">
+      <table>
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Endpoint</th>
+            <th>Status</th>
+            <th>Access</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="4" style="background:#1c2230;color:var(--muted);font-size:.7rem;padding:6px 16px;">AUTH</td></tr>
+          <tr>
+            <td><span class="method POST">POST</span></td>
+            <td class="path">/auth/register</td>
+            <td>201</td>
+            <td><span class="role-tag">Public</span></td>
+          </tr>
+          <tr>
+            <td><span class="method POST">POST</span></td>
+            <td class="path">/auth/login</td>
+            <td>200</td>
+            <td><span class="role-tag">Public</span></td>
+          </tr>
+          <tr>
+            <td><span class="method POST">POST</span></td>
+            <td class="path">/auth/logout</td>
+            <td>200</td>
+            <td><span class="role-tag">Public</span></td>
+          </tr>
+          <tr>
+            <td><span class="method GET">GET</span></td>
+            <td class="path">/auth/me</td>
+            <td>200</td>
+            <td><span class="role-tag">Authenticated</span></td>
+          </tr>
+
+          <tr><td colspan="4" style="background:#1c2230;color:var(--muted);font-size:.7rem;padding:6px 16px;">IDEAS</td></tr>
+          <tr>
+            <td><span class="method POST">POST</span></td>
+            <td class="path">/ideas</td>
+            <td>201</td>
+            <td><span class="role-tag">FOUNDER</span></td>
+          </tr>
+          <tr>
+            <td><span class="method GET">GET</span></td>
+            <td class="path">/ideas</td>
+            <td>200</td>
+            <td><span class="role-tag">INVESTOR</span><span class="role-tag">ADMIN</span></td>
+          </tr>
+          <tr>
+            <td><span class="method GET">GET</span></td>
+            <td class="path">/ideas/{id}</td>
+            <td>200 / 404</td>
+            <td><span class="role-tag">Authenticated</span></td>
+          </tr>
+          <tr>
+            <td><span class="method PUT">PUT</span></td>
+            <td class="path">/ideas/{id}</td>
+            <td>200 / 403</td>
+            <td><span class="role-tag">FOUNDER</span></td>
+          </tr>
+          <tr>
+            <td><span class="method DELETE">DELETE</span></td>
+            <td class="path">/ideas/{id}</td>
+            <td>204 / 403</td>
+            <td><span class="role-tag">FOUNDER</span></td>
+          </tr>
+          <tr>
+            <td><span class="method PATCH">PATCH</span></td>
+            <td class="path">/ideas/{id}/verify</td>
+            <td>200 / 403</td>
+            <td><span class="role-tag">ADMIN</span></td>
+          </tr>
+          <tr>
+            <td><span class="method PATCH">PATCH</span></td>
+            <td class="path">/ideas/{id}/reject</td>
+            <td>200 / 403</td>
+            <td><span class="role-tag">ADMIN</span></td>
+          </tr>
+
+          <tr><td colspan="4" style="background:#1c2230;color:var(--muted);font-size:.7rem;padding:6px 16px;">DEALS</td></tr>
+          <tr>
+            <td><span class="method POST">POST</span></td>
+            <td class="path">/deals/profiles</td>
+            <td>201 / 409</td>
+            <td><span class="role-tag">INVESTOR</span></td>
+          </tr>
+          <tr>
+            <td><span class="method GET">GET</span></td>
+            <td class="path">/deals/profiles/me</td>
+            <td>200 / 404</td>
+            <td><span class="role-tag">INVESTOR</span></td>
+          </tr>
+          <tr>
+            <td><span class="method POST">POST</span></td>
+            <td class="path">/deals/offers</td>
+            <td>201</td>
+            <td><span class="role-tag">INVESTOR</span></td>
+          </tr>
+          <tr>
+            <td><span class="method PATCH">PATCH</span></td>
+            <td class="path">/deals/offers/{id}/accept</td>
+            <td>200 / 403</td>
+            <td><span class="role-tag">FOUNDER</span></td>
+          </tr>
+          <tr>
+            <td><span class="method PATCH">PATCH</span></td>
+            <td class="path">/deals/offers/{id}/reject</td>
+            <td>200 / 403</td>
+            <td><span class="role-tag">FOUNDER</span></td>
+          </tr>
+          <tr>
+            <td><span class="method GET">GET</span></td>
+            <td class="path">/deals/matches</td>
+            <td>200</td>
+            <td><span class="role-tag">INVESTOR</span><span class="role-tag">FOUNDER</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── Links ── -->
+  <section>
+    <div class="section-title">Quick Links</div>
+    <div class="btn-row">
+      <a class="btn btn-primary" href="/actuator/health" target="_blank">❤️ Health Check</a>
+      <a class="btn btn-outline" href="http://localhost:3001/d/investbridge-main" target="_blank">📊 Grafana Dashboard</a>
+      <a class="btn btn-outline" href="/actuator/prometheus" target="_blank">📈 Prometheus Metrics</a>
+    </div>
+  </section>
+
+  <footer>
+    InvestBridge · Kocaeli University — BSM Yazılım Laboratuvarı II · Spring 2026
+  </footer>
+
+</div>
+
+<script>
+  // Check dispatcher health
+  fetch('/actuator/health')
+    .then(r => r.json())
+    .then(d => {
+      document.getElementById('stat-health').textContent =
+        d.status === 'UP' ? '✅ UP' : '⚠️ ' + d.status;
+    })
+    .catch(() => {
+      document.getElementById('stat-health').textContent = '❌ DOWN';
+    });
+
+  // Internal services are on a private Docker network — not reachable from the browser.
+  // We confirm they are alive via the Dispatcher's own health (which connects to all of them).
+  // Individual service dots are set to green if the gateway itself is UP.
+  fetch('/actuator/health')
+    .then(r => r.json())
+    .then(d => {
+      const alive = d.status === 'UP';
+      ['auth', 'idea', 'deal', 'ai'].forEach(id => {
+        const dot = document.getElementById('dot-' + id);
+        const lbl = document.getElementById('lbl-' + id);
+        if (alive) {
+          dot.className = 'dot green';
+          lbl.textContent = 'Healthy';
+        } else {
+          dot.className = 'dot red';
+          lbl.textContent = 'Unreachable';
+        }
+      });
+    })
+    .catch(() => {
+      ['auth', 'idea', 'deal', 'ai'].forEach(id => {
+        document.getElementById('dot-' + id).className = 'dot red';
+        document.getElementById('lbl-' + id).textContent = 'Unreachable';
+      });
+    });
+</script>
+
+</body>
+</html>
