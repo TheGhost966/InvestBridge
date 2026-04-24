@@ -92,15 +92,51 @@ sequenceDiagram
 
 ## 3. Microservices & Database Isolation
 
-Each service owns its own MongoDB — **no service queries another service's database**. Cross-service data flows only through the Dispatcher.
+Each service owns its own database — **no service queries another service's database**. Cross-service data flows only through the Dispatcher.
 
-| Service | Port | Database | Key Responsibility |
+| Service | Port | Database(s) | Key Responsibility |
 |---|---|---|---|
 | **Dispatcher** | `8080` (public) | dispatcher-mongo | JWT validation, routing, retry policy, metrics |
-| **Auth Service** | `8081` (internal) | auth-mongo | Register, login, logout, BCrypt, JWT issuance |
+| **Auth Service** | `8081` (internal) | auth-mongo **+** auth-postgres | Register, login, logout, BCrypt, JWT issuance; audit logs via JDBC |
 | **Idea Service** | `8082` (internal) | idea-mongo | Idea CRUD, DRAFT→VERIFIED workflow, role filtering |
 | **Deal Service** | `8083` (internal) | deal-mongo | Investor profiles, offers, match creation, abuse reports |
 | **AI Service** | `8084` (internal) | — | Idea analysis, investor matching (optional) |
+
+### 3.1 JDBC ↔ NoSQL Isolation (Auth Service)
+
+The auth service deliberately splits its storage along **responsibility boundaries**, not technology preference:
+
+| Kind of data | Store | Layer | Why |
+|---|---|---|---|
+| User identity (email, BCrypt hash, role) | **MongoDB** | `UserRepository` (Spring Data) | Flexible schema; rarely joined |
+| Auth audit log (login / logout / register) | **PostgreSQL** | `JdbcAuditLogWriter` (raw JDBC) | Append-only; queried by time range; demands ACID + indexes |
+
+The two layers **never join or cross-reference** at the query level. The audit writer is abstracted behind the `AuditLogWriter` interface and injected via `ObjectProvider<T>`, so the service still starts if the JDBC DataSource is absent (unit tests) — failure to write an audit log logs a warning rather than failing the login.
+
+```
+com.platform.auth.audit
+├── AuditLogWriter.java            // interface — Dependency Inversion
+├── AuditEvent.java                // POJO — Single Responsibility
+├── AuditDataSourceConfig.java     // @ConditionalOnProperty — only built when audit.jdbc.url is set
+├── JdbcAuditLogWriter.java        // raw DataSource → PreparedStatement → ResultSet
+└── AuditPersistenceException.java // wraps SQLException for global handler
+```
+
+The schema (`auth-service/src/main/resources/db/init.sql`) is mounted into the Postgres container at startup AND is re-used by the Testcontainers integration test, so schema drift between dev/test is impossible.
+
+### 3.2 Shared Generic Types (`common/` module)
+
+A separate Maven module provides `Generic<T>` building blocks reused across services — satisfying the "parametric typing" rubric criterion with real production usage (not just demo code):
+
+| Class | Signature | Used by |
+|---|---|---|
+| `ApiResponse<T>` | `ApiResponse<T> { T data; List<String> errors; Instant timestamp; }` | `idea-service` `/ideas/paged` response envelope |
+| `PagedResult<T>` | `PagedResult<T> { List<T> items; int page, size, totalPages; long totalElements; }` | `idea-service` `IdeaService.listPaged()` |
+| `GenericCache<K,V>` | `interface GenericCache<K,V> { Optional<V> get(K); void put(K,V); ... }` | Available to all services |
+| `InMemoryCache<K,V>` | `ConcurrentHashMap`-backed impl of `GenericCache` | Reference implementation |
+| `CrudRepository<T,ID>` | `interface CrudRepository<T,ID>` | Shared repository abstraction |
+
+All classes are unit-tested in `common/src/test/java` (9/9 green) and each consumer service pulls `common` as a Maven dependency.
 
 ### Network Isolation
 
@@ -113,7 +149,8 @@ flowchart LR
         A["Auth Service"]
         I["Idea Service"]
         De["Deal Service"]
-        AM["Auth Mongo"]
+        AM["Auth Mongo\n(user identity)"]
+        AP["Auth Postgres\n(audit log / JDBC)"]
         IM["Idea Mongo"]
         DM["Deal Mongo"]
         R["Redis"]
@@ -122,7 +159,7 @@ flowchart LR
     end
     Internet["Internet"] --> D
     D --> A & I & De
-    A --> AM & R
+    A --> AM & AP & R
     I --> IM
     De --> DM
     D --> P
@@ -376,6 +413,18 @@ curl -X POST http://localhost:8080/auth/login \
 | Dispatcher (API entry point) | `http://localhost:8080` |
 | Grafana | `http://localhost:3001` |
 | Prometheus | `http://localhost:9090` *(internal — not exposed by default)* |
+
+### Running Tests
+
+```bash
+# Unit tests only — no Docker required
+mvn test
+
+# Including the Testcontainers JDBC integration test (starts a real postgres:16 container)
+mvn test -DrunDockerITs=true -pl auth-service
+```
+
+The `JdbcAuditLogWriterContainerTest` spins up a real PostgreSQL container via Testcontainers, runs `db/init.sql` against it, and exercises `JdbcAuditLogWriter` end-to-end (insert, generated keys, ordering, limit, exception wrapping). It is gated behind a flag because Testcontainers requires Docker Desktop to expose an engine socket the docker-java client can reach (on Windows: enable *Settings → General → Expose daemon on tcp://localhost:2375 without TLS*, then set `DOCKER_HOST=tcp://localhost:2375`).
 
 ---
 

@@ -1,5 +1,7 @@
 package com.platform.idea.controller;
 
+import com.platform.common.api.ApiResponse;
+import com.platform.common.api.PagedResult;
 import com.platform.idea.domain.Idea;
 import com.platform.idea.dto.CreateIdeaRequest;
 import com.platform.idea.dto.RejectRequest;
@@ -44,6 +46,21 @@ public class IdeaController {
 
         Page<Idea> result = ideaService.list(role, userId, PageRequest.of(page, size));
         return ResponseEntity.ok(result);
+    }
+
+    /**
+     * GET /ideas/paged — returns the generic {@link ApiResponse}&lt;{@link PagedResult}&lt;Idea&gt;&gt;
+     * envelope used by the Android client. Same role rules as {@link #list}.
+     */
+    @GetMapping("/paged")
+    public ResponseEntity<ApiResponse<PagedResult<Idea>>> listPaged(
+            @RequestHeader(value = "X-User-Id",   required = false) String userId,
+            @RequestHeader(value = "X-User-Role", required = false) String role,
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        PagedResult<Idea> result = ideaService.listPaged(role, userId, PageRequest.of(page, size));
+        return ResponseEntity.ok(ApiResponse.ok(result));
     }
 
     /** GET /ideas/{id} → 200 or 404 */

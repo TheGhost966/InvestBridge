@@ -1,9 +1,9 @@
 package com.platform.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.auth.audit.AuditLogWriter;
 import com.platform.auth.domain.Role;
 import com.platform.auth.dto.RegisterRequest;
-import com.platform.auth.repository.AuditLogRepository;
 import com.platform.auth.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,7 +32,7 @@ class AuthRegisterTest {
     @Autowired ObjectMapper objectMapper;
 
     @MockBean UserRepository userRepository;
-    @MockBean AuditLogRepository auditLogRepository;
+    @MockBean AuditLogWriter auditLogWriter;
 
     @BeforeEach
     void setup() {

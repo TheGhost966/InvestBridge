@@ -26,6 +26,7 @@ networks:
 volumes:
   dispatcher_mongo_data:
   auth_mongo_data:
+  auth_postgres_data:
   idea_mongo_data:
   deal_mongo_data:
   redis_data:
@@ -84,11 +85,18 @@ services:
     networks:
       - internal_net
     environment:
+      # NoSQL layer: users & identity (MongoDB)
       SPRING_DATA_MONGODB_URI: mongodb://auth-mongo:27017/authdb
       SPRING_DATA_REDIS_HOST: redis
+      # JDBC layer: audit trail (PostgreSQL) — isolated from user data
+      AUDIT_JDBC_URL: jdbc:postgresql://auth-postgres:5432/auditdb
+      AUDIT_JDBC_USER: audit
+      AUDIT_JDBC_PASSWORD: audit_pw
       JWT_SECRET: ${JWT_SECRET}
     depends_on:
       auth-mongo:
+        condition: service_healthy
+      auth-postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -197,6 +205,32 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────────────
+  # AUTH POSTGRES — JDBC-backed audit log store (relational)
+  # Holds append-only audit rows (LOGIN / LOGOUT events).
+  # Kept in a separate engine from user data to satisfy the
+  # "JDBC + NoSQL in isolated layers" architectural requirement.
+  # Init script: auth-service/src/main/resources/db/init.sql
+  # ─────────────────────────────────────────────────────────────────
+  auth-postgres:
+    image: postgres:16-alpine
+    container_name: auth-postgres
+    networks:
+      - internal_net
+    environment:
+      POSTGRES_DB: auditdb
+      POSTGRES_USER: audit
+      POSTGRES_PASSWORD: audit_pw
+    volumes:
+      - auth_postgres_data:/var/lib/postgresql/data
+      - ./auth-service/src/main/resources/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U audit -d auditdb"]
       interval: 10s
       timeout: 5s
       retries: 5

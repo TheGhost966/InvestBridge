@@ -25,9 +25,12 @@ class DispatcherErrorTest {
     }
 
     @Test
-    void whenRootPath_thenReturns404() throws Exception {
+    void whenRootPath_thenReturnsLandingPage() throws Exception {
+        // HomeController serves the InvestBridge API Gateway landing page at /
+        // instead of a bare 404. This test protects that contract.
         mockMvc.perform(get("/"))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/html"));
     }
 
     @Test

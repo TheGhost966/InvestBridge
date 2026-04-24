@@ -23,6 +23,13 @@
 
     <dependencies>
 
+        <!-- Shared generic types (ApiResponse<T>, PagedResult<T>, GenericCache<K,V>) -->
+        <dependency>
+            <groupId>com.platform</groupId>
+            <artifactId>common</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+
         <!-- Web: REST endpoints (/deals/offers, /deals/matches, etc.) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

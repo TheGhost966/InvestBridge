@@ -1,8 +1,9 @@
 package com.platform.auth;
 
+import com.platform.auth.audit.AuditEvent;
+import com.platform.auth.audit.AuditLogWriter;
 import com.platform.auth.domain.Role;
 import com.platform.auth.domain.User;
-import com.platform.auth.repository.AuditLogRepository;
 import com.platform.auth.repository.UserRepository;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -38,7 +39,7 @@ class AuthMeTest {
     private String jwtSecret;
 
     @MockBean UserRepository userRepository;
-    @MockBean AuditLogRepository auditLogRepository;
+    @MockBean AuditLogWriter auditLogWriter;
 
     private User testUser;
     private String validToken;
@@ -50,7 +51,7 @@ class AuthMeTest {
         testUser.setId("user-002");
 
         when(userRepository.findById("user-002")).thenReturn(Optional.of(testUser));
-        when(auditLogRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(auditLogWriter.log(any(AuditEvent.class))).thenAnswer(inv -> inv.getArgument(0));
 
         validToken = Jwts.builder()
                 .subject("user-002")

@@ -1,10 +1,11 @@
 package com.platform.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.auth.audit.AuditEvent;
+import com.platform.auth.audit.AuditLogWriter;
 import com.platform.auth.domain.Role;
 import com.platform.auth.domain.User;
 import com.platform.auth.dto.LoginRequest;
-import com.platform.auth.repository.AuditLogRepository;
 import com.platform.auth.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,7 +36,7 @@ class AuthLoginTest {
     @Autowired PasswordEncoder passwordEncoder;
 
     @MockBean UserRepository userRepository;
-    @MockBean AuditLogRepository auditLogRepository;
+    @MockBean AuditLogWriter auditLogWriter;
 
     private User existingUser;
 
@@ -48,7 +49,7 @@ class AuthLoginTest {
         when(userRepository.findByEmail("bob@example.com")).thenReturn(Optional.of(existingUser));
         when(userRepository.findByEmail(anyString())).thenReturn(Optional.empty());
         when(userRepository.findByEmail("bob@example.com")).thenReturn(Optional.of(existingUser));
-        when(auditLogRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(auditLogWriter.log(any(AuditEvent.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test

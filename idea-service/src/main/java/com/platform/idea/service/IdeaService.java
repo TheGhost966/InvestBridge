@@ -1,5 +1,6 @@
 package com.platform.idea.service;
 
+import com.platform.common.api.PagedResult;
 import com.platform.idea.domain.Idea;
 import com.platform.idea.domain.IdeaStatus;
 import com.platform.idea.dto.CreateIdeaRequest;
@@ -46,6 +47,21 @@ public class IdeaService {
             case "FOUNDER"  -> ideaRepository.findByFounderId(userId, pageable);
             default -> throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Unknown role");
         };
+    }
+
+    /**
+     * Role-aware pagination returning the generic {@link PagedResult} envelope
+     * used by the Android client. Mirrors {@link #list} but with a decoupled
+     * shape that does not leak Spring Data's {@code Page} type to consumers.
+     */
+    public PagedResult<Idea> listPaged(String role, String userId, Pageable pageable) {
+        Page<Idea> page = list(role, userId, pageable);
+        return PagedResult.of(
+                page.getContent(),
+                page.getNumber(),
+                page.getSize(),
+                page.getTotalElements()
+        );
     }
 
     public Idea getById(String id) {
