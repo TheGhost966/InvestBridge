@@ -1,0 +1,158 @@
+/* ---------- InvestBridge desktop client — global styles ---------- */
+/* Colour language: deep navy primary, teal accent, warm red for errors.  */
+
+.root {
+    -fx-font-family: "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-size: 13px;
+
+    -ib-bg:          #f4f6fb;
+    -ib-card:        #ffffff;
+    -ib-ink:         #0f172a;   /* slate-900  */
+    -ib-ink-muted:   #64748b;   /* slate-500  */
+    -ib-primary:     #1d4ed8;   /* indigo-700 */
+    -ib-primary-pressed: #1e40af;
+    -ib-accent:      #0ea5e9;   /* sky-500    */
+    -ib-danger:      #dc2626;   /* red-600    */
+    -ib-border:      #e2e8f0;
+
+    -ib-role-founder:  #16a34a; /* green-600 */
+    -ib-role-investor: #2563eb; /* blue-600  */
+    -ib-role-admin:    #b45309; /* amber-700 */
+}
+
+/* ---------- Auth (login / register) ---------- */
+.auth-root {
+    -fx-background-color: linear-gradient(to bottom right, #eef2ff, #f0fdfa);
+}
+
+.auth-card {
+    -fx-background-color: -ib-card;
+    -fx-background-radius: 12;
+    -fx-border-radius: 12;
+    -fx-border-color: -ib-border;
+    -fx-border-width: 1;
+    -fx-effect: dropshadow(gaussian, rgba(15,23,42,0.08), 24, 0.15, 0, 8);
+}
+
+.app-title {
+    -fx-font-size: 22px;
+    -fx-font-weight: 700;
+    -fx-text-fill: -ib-ink;
+}
+
+.app-subtitle {
+    -fx-font-size: 13px;
+    -fx-text-fill: -ib-ink-muted;
+}
+
+.field-label {
+    -fx-font-size: 12px;
+    -fx-font-weight: 600;
+    -fx-text-fill: -ib-ink;
+}
+
+.muted-label {
+    -fx-font-size: 12px;
+    -fx-text-fill: -ib-ink-muted;
+}
+
+.error-label {
+    -fx-text-fill: -ib-danger;
+    -fx-font-size: 12px;
+}
+
+.text-field, .password-field, .combo-box {
+    -fx-background-color: #ffffff;
+    -fx-border-color: -ib-border;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 8 10 8 10;
+}
+
+.text-field:focused, .password-field:focused, .combo-box:focused {
+    -fx-border-color: -ib-primary;
+    -fx-border-width: 1.5;
+}
+
+/* Buttons */
+.primary-button {
+    -fx-background-color: -ib-primary;
+    -fx-text-fill: white;
+    -fx-font-weight: 600;
+    -fx-padding: 10 14 10 14;
+    -fx-background-radius: 6;
+    -fx-cursor: hand;
+}
+.primary-button:hover  { -fx-background-color: -ib-primary-pressed; }
+.primary-button:disabled {
+    -fx-opacity: 0.6;
+    -fx-cursor: default;
+}
+
+.ghost-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: -ib-ink;
+    -fx-border-color: -ib-border;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 6 12 6 12;
+    -fx-cursor: hand;
+}
+.ghost-button:hover {
+    -fx-background-color: #eef2ff;
+    -fx-border-color: -ib-primary;
+}
+
+.hyperlink {
+    -fx-text-fill: -ib-primary;
+    -fx-underline: false;
+    -fx-border-color: transparent;
+}
+.hyperlink:hover { -fx-underline: true; }
+
+/* ---------- Dashboards ---------- */
+.dashboard-root {
+    -fx-background-color: -ib-bg;
+}
+
+.top-bar {
+    -fx-background-color: -ib-card;
+    -fx-border-color: -ib-border;
+    -fx-border-width: 0 0 1 0;
+}
+
+.top-bar-title {
+    -fx-font-size: 16px;
+    -fx-font-weight: 700;
+    -fx-text-fill: -ib-ink;
+}
+
+.top-bar-sep {
+    -fx-text-fill: -ib-ink-muted;
+}
+
+.top-bar-role {
+    -fx-font-size: 12px;
+    -fx-font-weight: 700;
+    -fx-padding: 3 10 3 10;
+    -fx-background-radius: 999;
+    -fx-text-fill: white;
+}
+.top-bar-role.founder  { -fx-background-color: -ib-role-founder; }
+.top-bar-role.investor { -fx-background-color: -ib-role-investor; }
+.top-bar-role.admin    { -fx-background-color: -ib-role-admin; }
+
+.placeholder-pane {
+    -fx-background-color: transparent;
+}
+
+.placeholder-title {
+    -fx-font-size: 20px;
+    -fx-font-weight: 700;
+    -fx-text-fill: -ib-ink;
+}
+
+.placeholder-subtitle {
+    -fx-font-size: 14px;
+    -fx-text-fill: -ib-ink-muted;
+}

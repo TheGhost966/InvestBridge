@@ -30,6 +30,7 @@
         <module>ai-service</module>
         <module>deal-service</module>
         <module>idea-service</module>
+        <module>desktop-client</module>
     </modules>
 
     <properties>

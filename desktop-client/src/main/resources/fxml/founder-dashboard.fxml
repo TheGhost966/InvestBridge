@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane styleClass="dashboard-root"
+            xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.platform.desktop.view.controller.FounderDashboardController">
+
+    <top>
+        <HBox alignment="CENTER_LEFT" spacing="16" styleClass="top-bar">
+            <padding><Insets top="12" right="20" bottom="12" left="20"/></padding>
+            <Label text="InvestBridge" styleClass="top-bar-title"/>
+            <Label text="·"            styleClass="top-bar-sep"/>
+            <Label text="Founder"      styleClass="top-bar-role founder"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Label fx:id="identityLabel" styleClass="muted-label"/>
+            <Button text="Logout" onAction="#onLogout" styleClass="ghost-button"/>
+        </HBox>
+    </top>
+
+    <center>
+        <VBox alignment="CENTER" spacing="12" styleClass="placeholder-pane">
+            <padding><Insets top="24" right="24" bottom="24" left="24"/></padding>
+            <Label text="Founder dashboard" styleClass="placeholder-title"/>
+            <Label text="My ideas, offers, and matches will live here."
+                   styleClass="placeholder-subtitle" wrapText="true"/>
+            <Label text="Coming in Phase 1.2 — idea CRUD and the FundingRing custom graphic."
+                   styleClass="muted-label" wrapText="true"/>
+        </VBox>
+    </center>
+</BorderPane>
