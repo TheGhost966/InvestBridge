@@ -9,9 +9,14 @@ COPY auth-service/pom.xml auth-service/
 COPY idea-service/pom.xml idea-service/
 COPY deal-service/pom.xml deal-service/
 COPY ai-service/pom.xml ai-service/
+# common/ is a real dependency of idea-service (provides PagedResult<T>, ApiResponse<T>);
+# desktop-client/pom.xml is only here so parent-pom <modules> validation succeeds.
+COPY common/pom.xml common/
+COPY desktop-client/pom.xml desktop-client/
 
 RUN mvn dependency:go-offline -pl idea-service -am -q
 
+COPY common/src common/src
 COPY idea-service/src idea-service/src
 
 RUN mvn clean package -pl idea-service -am -DskipTests -q

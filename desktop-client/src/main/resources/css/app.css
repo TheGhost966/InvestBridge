@@ -156,3 +156,69 @@
     -fx-font-size: 14px;
     -fx-text-fill: -ib-ink-muted;
 }
+
+/* ---------- Page chrome ---------- */
+.page-title {
+    -fx-font-size: 20px;
+    -fx-font-weight: 700;
+    -fx-text-fill: -ib-ink;
+}
+
+/* ---------- Idea cards (Founder list) ---------- */
+.card-scroll {
+    -fx-background-color: transparent;
+    -fx-background: transparent;
+    -fx-padding: 0;
+}
+.card-scroll > .viewport { -fx-background-color: transparent; }
+
+.idea-card {
+    -fx-background-color: -ib-card;
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-border-color: -ib-border;
+    -fx-border-width: 1;
+    -fx-effect: dropshadow(gaussian, rgba(15,23,42,0.05), 12, 0.08, 0, 4);
+}
+.idea-card:hover {
+    -fx-border-color: #cbd5e1;
+}
+
+.card-title {
+    -fx-font-size: 16px;
+    -fx-font-weight: 700;
+    -fx-text-fill: -ib-ink;
+}
+
+.card-summary {
+    -fx-font-size: 13px;
+    -fx-text-fill: #334155;
+}
+
+.card-meta {
+    -fx-font-size: 11px;
+    -fx-text-fill: -ib-ink-muted;
+}
+
+.card-rejection {
+    -fx-font-size: 12px;
+    -fx-text-fill: -ib-danger;
+    -fx-background-color: #fef2f2;
+    -fx-border-color: #fecaca;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 6 10 6 10;
+}
+
+.danger-button {
+    -fx-text-fill: -ib-danger;
+}
+.danger-button:hover:enabled {
+    -fx-background-color: #fef2f2;
+    -fx-border-color: -ib-danger;
+}
+
+.empty-state {
+    -fx-padding: 60 24 60 24;
+    -fx-alignment: center;
+}

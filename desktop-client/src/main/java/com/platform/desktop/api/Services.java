@@ -12,9 +12,11 @@ public final class Services {
 
     private static final ApiClient CLIENT = new ApiClient();
     private static final AuthApi   AUTH   = new AuthApi(CLIENT);
+    private static final IdeaApi   IDEA   = new IdeaApi(CLIENT);
 
     private Services() {}
 
     public static ApiClient apiClient() { return CLIENT; }
     public static AuthApi   authApi()   { return AUTH; }
+    public static IdeaApi   ideaApi()   { return IDEA; }
 }

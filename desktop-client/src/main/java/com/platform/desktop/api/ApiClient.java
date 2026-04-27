@@ -1,5 +1,6 @@
 package com.platform.desktop.api;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -10,6 +11,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 
 /**
@@ -27,7 +29,16 @@ import java.time.Duration;
 public class ApiClient {
 
     public static final String DEFAULT_BASE_URL = "http://localhost:8080";
-    private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(10);
+
+    /** Tight: if the dispatcher socket isn't accepting, fail quickly. */
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+    /**
+     * Loose: BCrypt + JDBC audit on auth, plus cold-cache MongoDB queries on
+     * other services, can push individual responses past 10–15 seconds on
+     * Windows/WSL2 — especially after a container restart. 30s gives us slack
+     * without making "real" outages take forever to surface.
+     */
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
     private final String baseUrl;
     private final HttpClient http;
@@ -40,7 +51,7 @@ public class ApiClient {
     public ApiClient(String baseUrl) {
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.http = HttpClient.newBuilder()
-                .connectTimeout(DEFAULT_TIMEOUT)
+                .connectTimeout(CONNECT_TIMEOUT)
                 .version(HttpClient.Version.HTTP_1_1)
                 .build();
         this.mapper = new ObjectMapper()
@@ -73,6 +84,16 @@ public class ApiClient {
         send("DELETE", path, null, Void.class);
     }
 
+    // ─── parameterised-type variants (for ApiResponse<PagedResult<Idea>> etc.) ─
+
+    public <T> T get(String path, TypeReference<T> typeRef) {
+        return send("GET", path, null, typeRef);
+    }
+
+    public <T> T post(String path, Object body, TypeReference<T> typeRef) {
+        return send("POST", path, body, typeRef);
+    }
+
     // ─── core send ──────────────────────────────────────────────────────────────
 
     /**
@@ -80,9 +101,31 @@ public class ApiClient {
      *                     (also used for empty 204 responses).
      */
     public <T> T send(String method, String path, Object body, Class<T> responseType) {
+        return sendInternal(method, path, body,
+                payload -> mapper.readValue(payload, responseType),
+                responseType == Void.class);
+    }
+
+    /** Use when {@code T} is a parameterised type, e.g. {@code ApiResponse<PagedResult<Idea>>}. */
+    public <T> T send(String method, String path, Object body, TypeReference<T> typeRef) {
+        return sendInternal(method, path, body,
+                payload -> mapper.readValue(payload, typeRef),
+                false);
+    }
+
+    @FunctionalInterface
+    private interface PayloadParser<T> {
+        T parse(String payload) throws IOException;
+    }
+
+    private <T> T sendInternal(String method,
+                               String path,
+                               Object body,
+                               PayloadParser<T> parser,
+                               boolean voidExpected) {
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl + path))
-                .timeout(DEFAULT_TIMEOUT)
+                .timeout(REQUEST_TIMEOUT)
                 .header("Accept", "application/json");
 
         String token = SessionManager.token();
@@ -106,6 +149,11 @@ public class ApiClient {
         HttpResponse<String> response;
         try {
             response = http.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+        } catch (HttpTimeoutException e) {
+            // Connected, but the response did not arrive within REQUEST_TIMEOUT.
+            // Surface it distinctly so the user knows the server is reachable but slow.
+            throw new ApiException("The server is taking too long to respond ("
+                    + REQUEST_TIMEOUT.toSeconds() + "s timeout). Please try again.", e);
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             throw new ApiException("Cannot reach " + baseUrl + path
@@ -116,11 +164,11 @@ public class ApiClient {
         String payload = response.body();
 
         if (status >= 200 && status < 300) {
-            if (responseType == Void.class || payload == null || payload.isBlank()) {
+            if (voidExpected || payload == null || payload.isBlank()) {
                 return null;
             }
             try {
-                return mapper.readValue(payload, responseType);
+                return parser.parse(payload);
             } catch (IOException e) {
                 throw new ApiException("Failed to parse response from " + path, e);
             }

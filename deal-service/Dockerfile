@@ -9,6 +9,9 @@ COPY auth-service/pom.xml auth-service/
 COPY idea-service/pom.xml idea-service/
 COPY deal-service/pom.xml deal-service/
 COPY ai-service/pom.xml ai-service/
+# Parent pom lists common/ and desktop-client/ as modules — both must exist for validation.
+COPY common/pom.xml common/
+COPY desktop-client/pom.xml desktop-client/
 
 RUN mvn dependency:go-offline -pl deal-service -am -q
 
