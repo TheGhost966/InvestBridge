@@ -62,6 +62,24 @@ public class DealService {
                 .orElseThrow(() -> new ResourceNotFoundException("Offer", offerId));
     }
 
+    /**
+     * Role-aware listing of offers visible to {@code userId}:
+     * <ul>
+     *   <li>INVESTOR — offers they have made (own outgoing)</li>
+     *   <li>FOUNDER  — offers received on their ideas (incoming)</li>
+     *   <li>ADMIN    — every offer in the system (oversight)</li>
+     * </ul>
+     */
+    public List<Offer> listOffers(String userId, String role) {
+        if (role == null) return List.of();
+        return switch (role.toUpperCase()) {
+            case "INVESTOR" -> offerRepo.findByInvestorId(userId);
+            case "FOUNDER"  -> offerRepo.findByFounderId(userId);
+            case "ADMIN"    -> offerRepo.findAll();
+            default         -> List.of();
+        };
+    }
+
     public Offer acceptOffer(String offerId, String founderId) {
         Offer offer = offerRepo.findById(offerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Offer", offerId));
@@ -88,10 +106,13 @@ public class DealService {
     }
 
     public List<Match> getMatches(String userId, String role) {
-        if ("INVESTOR".equalsIgnoreCase(role)) {
-            return matchRepo.findByInvestorId(userId);
-        }
-        return matchRepo.findByFounderId(userId);
+        if (role == null) return List.of();
+        return switch (role.toUpperCase()) {
+            case "INVESTOR" -> matchRepo.findByInvestorId(userId);
+            case "FOUNDER"  -> matchRepo.findByFounderId(userId);
+            case "ADMIN"    -> matchRepo.findAll();
+            default         -> List.of();
+        };
     }
 
     public AbuseReport createReport(String reporterId, AbuseReportRequest req) {

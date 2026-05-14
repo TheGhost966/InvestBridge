@@ -4,6 +4,8 @@
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.Region?>
@@ -27,27 +29,74 @@
     </top>
 
     <center>
-        <VBox spacing="12">
-            <padding><Insets top="20" right="24" bottom="20" left="24"/></padding>
+        <TabPane fx:id="tabs" tabClosingPolicy="UNAVAILABLE" styleClass="dashboard-tabs">
 
-            <!-- Toolbar -->
-            <HBox alignment="CENTER_LEFT" spacing="10">
-                <Label text="My Ideas" styleClass="page-title"/>
-                <Region HBox.hgrow="ALWAYS"/>
-                <Button text="Refresh"   onAction="#onRefresh" styleClass="ghost-button"/>
-                <Button text="+ New idea" onAction="#onNewIdea" styleClass="primary-button"/>
-            </HBox>
-
-            <Label fx:id="statusLabel" styleClass="muted-label" text=""/>
-
-            <!-- Idea list (cards stack vertically) -->
-            <ScrollPane fitToWidth="true" styleClass="card-scroll" VBox.vgrow="ALWAYS">
+            <!-- ── My Ideas (with real funding rings) ─────────────────────── -->
+            <Tab text="My ideas">
                 <content>
-                    <VBox fx:id="ideaList" spacing="12">
-                        <padding><Insets top="4" right="2" bottom="20" left="2"/></padding>
+                    <VBox spacing="12">
+                        <padding><Insets top="20" right="24" bottom="20" left="24"/></padding>
+                        <HBox alignment="CENTER_LEFT" spacing="10">
+                            <Label text="My Ideas" styleClass="page-title"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Button text="Refresh"    onAction="#onRefreshIdeas" styleClass="ghost-button"/>
+                            <Button text="+ New idea" onAction="#onNewIdea"      styleClass="primary-button"/>
+                        </HBox>
+                        <Label fx:id="ideasStatus" styleClass="muted-label" text=""/>
+                        <ScrollPane fitToWidth="true" styleClass="card-scroll" VBox.vgrow="ALWAYS">
+                            <content>
+                                <VBox fx:id="ideaList" spacing="12">
+                                    <padding><Insets top="4" right="2" bottom="20" left="2"/></padding>
+                                </VBox>
+                            </content>
+                        </ScrollPane>
                     </VBox>
                 </content>
-            </ScrollPane>
-        </VBox>
+            </Tab>
+
+            <!-- ── Received Offers (accept / reject) ──────────────────────── -->
+            <Tab text="Received offers">
+                <content>
+                    <VBox spacing="12">
+                        <padding><Insets top="20" right="24" bottom="20" left="24"/></padding>
+                        <HBox alignment="CENTER_LEFT" spacing="10">
+                            <Label text="Offers on my ideas" styleClass="page-title"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Button text="Refresh" onAction="#onRefreshReceivedOffers" styleClass="ghost-button"/>
+                        </HBox>
+                        <Label fx:id="offersStatus" styleClass="muted-label" text=""/>
+                        <ScrollPane fitToWidth="true" styleClass="card-scroll" VBox.vgrow="ALWAYS">
+                            <content>
+                                <VBox fx:id="offersList" spacing="10">
+                                    <padding><Insets top="4" right="2" bottom="20" left="2"/></padding>
+                                </VBox>
+                            </content>
+                        </ScrollPane>
+                    </VBox>
+                </content>
+            </Tab>
+
+            <!-- ── My Matches (accepted offers) ───────────────────────────── -->
+            <Tab text="My matches">
+                <content>
+                    <VBox spacing="12">
+                        <padding><Insets top="20" right="24" bottom="20" left="24"/></padding>
+                        <HBox alignment="CENTER_LEFT" spacing="10">
+                            <Label text="Matched investments" styleClass="page-title"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Button text="Refresh" onAction="#onRefreshMatches" styleClass="ghost-button"/>
+                        </HBox>
+                        <Label fx:id="matchesStatus" styleClass="muted-label" text=""/>
+                        <ScrollPane fitToWidth="true" styleClass="card-scroll" VBox.vgrow="ALWAYS">
+                            <content>
+                                <VBox fx:id="matchesList" spacing="10">
+                                    <padding><Insets top="4" right="2" bottom="20" left="2"/></padding>
+                                </VBox>
+                            </content>
+                        </ScrollPane>
+                    </VBox>
+                </content>
+            </Tab>
+        </TabPane>
     </center>
 </BorderPane>

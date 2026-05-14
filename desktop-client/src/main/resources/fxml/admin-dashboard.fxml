@@ -1,8 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<?import com.platform.desktop.view.components.DonutChart?>
+<?import com.platform.desktop.view.components.MatchGraph?>
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.ToggleButton?>
+<?import javafx.scene.control.ToggleGroup?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.Region?>
@@ -26,13 +31,74 @@
     </top>
 
     <center>
-        <VBox alignment="CENTER" spacing="12" styleClass="placeholder-pane">
-            <padding><Insets top="24" right="24" bottom="24" left="24"/></padding>
-            <Label text="Admin dashboard" styleClass="placeholder-title"/>
-            <Label text="Idea verification queue, status analytics, and the matches network."
-                   styleClass="placeholder-subtitle" wrapText="true"/>
-            <Label text="Coming in Phase 1.4/1.5 — verify/reject flow, DonutChart, MatchGraph."
-                   styleClass="muted-label" wrapText="true"/>
+        <VBox spacing="14">
+            <padding><Insets top="20" right="24" bottom="20" left="24"/></padding>
+
+            <!-- ── Stats: DonutChart + legend ─────────────────────────────── -->
+            <HBox spacing="12" alignment="CENTER_LEFT">
+                <Label text="Status overview" styleClass="page-title"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Button text="Refresh" onAction="#onRefresh" styleClass="ghost-button"/>
+            </HBox>
+
+            <HBox spacing="24" alignment="CENTER_LEFT" styleClass="stats-card">
+                <padding><Insets top="16" right="20" bottom="16" left="20"/></padding>
+
+                <DonutChart fx:id="donut" prefWidth="220" prefHeight="220"/>
+
+                <VBox fx:id="legendBox" spacing="8" alignment="CENTER_LEFT">
+                    <!-- Legend rows are populated by AdminDashboardController -->
+                </VBox>
+            </HBox>
+
+            <!-- ── Match network (force-directed graph) ──────────────────── -->
+            <HBox alignment="CENTER_LEFT" spacing="10">
+                <Label text="Match network" styleClass="page-title"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Label fx:id="matchesStatus" styleClass="muted-label" text=""/>
+            </HBox>
+            <VBox styleClass="stats-card">
+                <padding><Insets top="8" right="8" bottom="8" left="8"/></padding>
+                <MatchGraph fx:id="matchGraph" prefHeight="320"/>
+            </VBox>
+
+            <!-- ── Queue + filter ─────────────────────────────────────────── -->
+            <HBox alignment="CENTER_LEFT" spacing="10">
+                <Label text="Idea queue" styleClass="page-title"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Label fx:id="queueStatus" styleClass="muted-label" text=""/>
+            </HBox>
+
+            <HBox spacing="6" alignment="CENTER_LEFT" styleClass="filter-bar">
+                <padding><Insets top="6" right="0" bottom="6" left="0"/></padding>
+                <Label text="Filter:" styleClass="muted-label"/>
+                <fx:define>
+                    <ToggleGroup fx:id="filterGroup"/>
+                </fx:define>
+                <ToggleButton fx:id="filterAll"       text="All"       userData="ALL"
+                              toggleGroup="$filterGroup" selected="true"
+                              onAction="#onFilterChanged" styleClass="filter-chip"/>
+                <ToggleButton fx:id="filterDraft"     text="Draft"     userData="DRAFT"
+                              toggleGroup="$filterGroup"
+                              onAction="#onFilterChanged" styleClass="filter-chip"/>
+                <ToggleButton fx:id="filterSubmitted" text="Submitted" userData="SUBMITTED"
+                              toggleGroup="$filterGroup"
+                              onAction="#onFilterChanged" styleClass="filter-chip"/>
+                <ToggleButton fx:id="filterVerified"  text="Verified"  userData="VERIFIED"
+                              toggleGroup="$filterGroup"
+                              onAction="#onFilterChanged" styleClass="filter-chip"/>
+                <ToggleButton fx:id="filterRejected"  text="Rejected"  userData="REJECTED"
+                              toggleGroup="$filterGroup"
+                              onAction="#onFilterChanged" styleClass="filter-chip"/>
+            </HBox>
+
+            <ScrollPane fitToWidth="true" styleClass="card-scroll" VBox.vgrow="ALWAYS">
+                <content>
+                    <VBox fx:id="queueList" spacing="8">
+                        <padding><Insets top="4" right="2" bottom="20" left="2"/></padding>
+                    </VBox>
+                </content>
+            </ScrollPane>
         </VBox>
     </center>
 </BorderPane>

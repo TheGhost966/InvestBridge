@@ -42,6 +42,16 @@ public class DealController {
         return ResponseEntity.ok(dealService.getOffer(id));
     }
 
+    /**
+     * Role-aware list. INVESTOR sees own offers, FOUNDER sees offers received,
+     * ADMIN sees all. The dispatcher injects the role from the validated JWT.
+     */
+    @GetMapping("/offers")
+    public ResponseEntity<?> listOffers(@RequestHeader("X-User-Id") String userId,
+                                        @RequestHeader("X-User-Role") String role) {
+        return ResponseEntity.ok(dealService.listOffers(userId, role));
+    }
+
     @PatchMapping("/offers/{id}/accept")
     public ResponseEntity<?> acceptOffer(@PathVariable String id,
                                          @RequestHeader("X-User-Id") String userId,
