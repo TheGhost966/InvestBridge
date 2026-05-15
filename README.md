@@ -597,6 +597,26 @@ mvn test -DrunDockerITs=true -pl auth-service
 
 The `JdbcAuditLogWriterContainerTest` spins up a real PostgreSQL container via Testcontainers, runs `db/init.sql` against it, and exercises `JdbcAuditLogWriter` end-to-end (insert, generated keys, ordering, limit, exception wrapping). It is gated behind a flag because Testcontainers requires Docker Desktop to expose an engine socket the docker-java client can reach (on Windows: enable *Settings → General → Expose daemon on tcp://localhost:2375 without TLS*, then set `DOCKER_HOST=tcp://localhost:2375`).
 
+### Running the Desktop Client (JavaFX)
+
+> **Prerequisite:** The backend stack must already be running (`docker-compose up --build -d`) — the desktop client connects to the Dispatcher at `http://localhost:8080`.
+
+```bash
+# Option A — run directly via the JavaFX Maven plugin (recommended for development)
+mvn javafx:run -pl desktop-client
+
+# Option B — build a standalone fat JAR, then run it
+mvn package -pl desktop-client -DskipTests
+java -jar desktop-client/target/desktop-client-1.0.0-SNAPSHOT.jar
+```
+
+| Method | Command | Use Case |
+|---|---|---|
+| **Dev mode** | `mvn javafx:run -pl desktop-client` | Hot iteration — recompiles and launches in one step |
+| **Fat JAR** | `mvn package -pl desktop-client` → `java -jar ...` | Distributable single JAR (via `maven-shade-plugin`) — no Maven needed to run |
+
+The JavaFX plugin is configured with `mainClass = com.platform.desktop.DesktopApp`. The fat JAR uses `com.platform.desktop.Launcher` as its entry point (a non-`Application` wrapper class required by `maven-shade-plugin` to avoid JavaFX module errors).
+
 ---
 
 ## 10. Demo Walkthrough
