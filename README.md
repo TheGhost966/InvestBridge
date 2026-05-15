@@ -9,14 +9,15 @@
 1. [Problem Statement](#1-problem-statement)
 2. [Architecture Overview](#2-architecture-overview)
 3. [Microservices & Database Isolation](#3-microservices--database-isolation)
-4. [TDD Proof — All Services](#4-tdd-proof--all-services)
-5. [REST Maturity Model (RMM Level 2)](#5-rest-maturity-model-rmm-level-2)
-6. [Security & Network Isolation](#6-security--network-isolation)
-7. [Observability](#7-observability)
-8. [Running the Project](#8-running-the-project)
-9. [Demo Walkthrough](#9-demo-walkthrough)
-10. [Load Testing](#10-load-testing)
-11. [Team & Contributions](#11-team--contributions)
+4. [Desktop Client — JavaFX GUI](#4-desktop-client--javafx-gui)
+5. [TDD Proof — All Services](#5-tdd-proof--all-services)
+6. [REST Maturity Model (RMM Level 2)](#6-rest-maturity-model-rmm-level-2)
+7. [Security & Network Isolation](#7-security--network-isolation)
+8. [Observability](#8-observability)
+9. [Running the Project](#9-running-the-project)
+10. [Demo Walkthrough](#10-demo-walkthrough)
+11. [Load Testing](#11-load-testing)
+12. [Author](#12-author)
 
 ---
 
@@ -122,7 +123,76 @@ com.platform.auth.audit
 └── AuditPersistenceException.java // wraps SQLException for global handler
 ```
 
-The schema (`auth-service/src/main/resources/db/init.sql`) is mounted into the Postgres container at startup AND is re-used by the Testcontainers integration test, so schema drift between dev/test is impossible.
+#### JDBC API Usage — Full `java.sql` Lifecycle
+
+The `JdbcAuditLogWriter` uses **raw JDBC** — no Spring `JdbcTemplate`, no ORM, no JPA — exercising the core `java.sql` API directly:
+
+| JDBC Class | Usage in Code | Purpose |
+|---|---|---|
+| `javax.sql.DataSource` | Injected via `@Qualifier("auditDataSource")` | Connection factory, pool-managed by HikariCP |
+| `java.sql.Connection` | `dataSource.getConnection()` | Represents a physical database session |
+| `java.sql.PreparedStatement` | `conn.prepareStatement(SQL, RETURN_GENERATED_KEYS)` | Compiled SQL with `?` placeholders — prevents SQL injection |
+| `java.sql.ResultSet` | `ps.getGeneratedKeys()` and `ps.executeQuery()` | Cursor over query results; column access via `getString()`, `getLong()`, `getTimestamp()` |
+| `java.sql.Timestamp` | `Timestamp.from(instant)` / `ts.toInstant()` | Bridges Java 8 `Instant` ↔ JDBC temporal types |
+| `java.sql.SQLException` | Caught and wrapped in `AuditPersistenceException` | Unified error handling via `@ControllerAdvice` |
+
+Every JDBC resource is closed deterministically using **try-with-resources** — `Connection`, `PreparedStatement`, and `ResultSet` are all `AutoCloseable`:
+
+```java
+try (Connection conn = dataSource.getConnection();
+     PreparedStatement ps = conn.prepareStatement(
+             INSERT_SQL, Statement.RETURN_GENERATED_KEYS)) {
+
+    ps.setString(1, event.getUserId());      // positional parameter binding
+    ps.setString(2, event.getEmail());
+    ps.setString(3, event.getEvent());
+    ps.setTimestamp(4, Timestamp.from(when));
+
+    int rows = ps.executeUpdate();           // DML → returns affected row count
+
+    try (ResultSet keys = ps.getGeneratedKeys()) {
+        if (keys.next()) {
+            event.setId(keys.getLong(1));     // server-assigned BIGSERIAL key
+        }
+    }
+}
+```
+
+Three operations are implemented, each demonstrating a different JDBC pattern:
+
+| Operation | SQL | JDBC Pattern |
+|---|---|---|
+| `log(AuditEvent)` | `INSERT INTO audit_logs ... VALUES (?,?,?,?)` | `executeUpdate()` + `RETURN_GENERATED_KEYS` |
+| `findRecent(userId, limit)` | `SELECT ... WHERE user_id = ? ORDER BY ... LIMIT ?` | `executeQuery()` → iterate `ResultSet` with `while(rs.next())` |
+| `count()` | `SELECT COUNT(*) FROM audit_logs` | Scalar query → single `rs.getLong(1)` |
+
+#### PostgreSQL Schema (`db/init.sql`)
+
+```sql
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id           BIGSERIAL    PRIMARY KEY,
+    user_id      TEXT         NOT NULL,
+    email        TEXT,
+    event        TEXT         NOT NULL,
+    occurred_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_time
+    ON audit_logs (user_id, occurred_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_event_time
+    ON audit_logs (event, occurred_at DESC);
+```
+
+Two composite indexes support the main access patterns — "recent events for user X" and "all LOGIN events today" — without full table scans. The schema is mounted into the Postgres container at Docker startup **and** re-used by the Testcontainers integration test (`JdbcAuditLogWriterContainerTest`), guaranteeing zero schema drift between dev and test.
+
+#### Conditional Wiring — `AuditDataSourceConfig`
+
+The `DataSource` bean is created **only** when `audit.jdbc.url` is set (`@ConditionalOnProperty`), and `JdbcAuditLogWriter` is instantiated **only** when the `auditDataSource` bean exists (`@ConditionalOnBean`). This two-layer guard ensures:
+
+- **Unit tests** (no Docker) → no DataSource → no writer bean → service starts cleanly
+- **Integration tests** (Testcontainers) → real PostgreSQL 16 container → full JDBC path exercised end-to-end
+- **Production** (docker-compose) → dedicated `auth-postgres` container → audit writes are ACID-durable
 
 ### 3.2 Shared Generic Types (`common/` module)
 
@@ -170,7 +240,108 @@ flowchart LR
 
 ---
 
-## 4. TDD Proof — All Services
+## 4. Desktop Client — JavaFX GUI
+
+The platform ships a full **JavaFX 21 desktop client** (`desktop-client/` module) that provides a polished, native-feeling GUI for all three user roles. The client communicates with the backend exclusively through the Dispatcher's REST API on port `8080`.
+
+### 4.1 Architecture
+
+| Layer | Package | Responsibility |
+|---|---|---|
+| **API** | `com.platform.desktop.api` | HTTP client (`ApiClient`), typed service wrappers (`AuthApi`, `IdeaApi`, `DealApi`), JWT session management (`SessionManager`) |
+| **DTOs** | `com.platform.desktop.api.dto` | Request/response records mirroring the backend JSON schemas (16 classes) |
+| **Views** | `com.platform.desktop.view` | FXML layouts, CSS theme, controllers, custom Canvas components |
+| **Util** | `com.platform.desktop.util` | `AsyncUi` (background tasks → FX thread callback), `UiUtil` (error formatting) |
+
+Navigation is handled by a central **`Router`** that swaps FXML scenes on a single `Stage`. After login or registration, the Router inspects the user's role and automatically loads the correct dashboard:
+
+```java
+public static void toDashboardFor(Role role) {
+    switch (role) {
+        case FOUNDER  -> swap("/fxml/founder-dashboard.fxml");
+        case INVESTOR -> swap("/fxml/investor-dashboard.fxml");
+        case ADMIN    -> swap("/fxml/admin-dashboard.fxml");
+    }
+}
+```
+
+### 4.2 Login Page
+
+The login screen (`login.fxml` + `LoginController`) presents a centred card-style form over a soft indigo → teal gradient background:
+
+- **Fields:** Email (`TextField`) and Password (`PasswordField`) with labelled prompts
+- **Validation:** Client-side empty-field check before firing the HTTP request
+- **Async flow:** `AsyncUi.run()` calls `AuthApi.login()` on a background thread → on success the JWT is stored in `SessionManager` and `Router.toDashboardFor(role)` navigates to the correct dashboard → on failure a red error label appears with a user-friendly message
+- **Busy state:** While the request is in flight, the button shows "Signing in…" and all inputs are disabled to prevent double submission
+- **Navigation:** A "New here? Create an account" hyperlink routes to the Register page
+
+### 4.3 Register Page
+
+The registration screen (`register.fxml` + `RegisterController`) extends the login form with a role selector:
+
+- **Fields:** Email, Password (min. 8 characters enforced client-side), and a `ComboBox<Role>` populated with FOUNDER / INVESTOR / ADMIN
+- **Validation:** All three fields required; password length check before network call
+- **Zero-friction onboarding:** On successful registration the JWT is captured automatically — the user lands on their dashboard without a separate login step
+- **Busy state & error handling:** Same pattern as Login — disabled inputs, button text change, inline error label
+
+### 4.4 Role-Based Dashboards
+
+Every dashboard extends `DashboardBase`, which provides a shared **top bar** with the logged-in user's identity label and a logout button. Logout calls `AuthApi.logout()` (blacklists the JWT in Redis) and navigates back to the login screen.
+
+#### Founder Dashboard — 3 Tabs
+
+| Tab | Content | Key Features |
+|---|---|---|
+| **My Ideas** | List of the founder's own ideas with status badges | **FundingRing** (animated Canvas) shows accepted funding vs. goal · Edit/Delete actions on DRAFT ideas · "+ New idea" button opens `IdeaFormDialog` |
+| **Received Offers** | Incoming investment offers from investors | PENDING offers sorted first (action needed) · Accept/Reject buttons per offer · Accept auto-creates a Match |
+| **My Matches** | Locked-in investments | 🤝 icon · investor + offer IDs · creation date |
+
+Each tab is **lazy-loaded** — data is fetched only when the tab is first selected. Caches are invalidated after mutations (create, edit, delete, accept, reject) to keep the UI consistent.
+
+#### Investor Dashboard — 4 Tabs
+
+| Tab | Content | Key Features |
+|---|---|---|
+| **Browse Ideas** | Admin-verified ideas available for investment | `InvestorIdeaCard` with "Make offer" button → opens `MakeOfferDialog` |
+| **My Profile** | Editable investor profile form | Bio, sectors (comma-separated), min/max investment range · Create on first save |
+| **My Offers** | Outgoing offers with status tracking | `StatusBadge` (PENDING / ACCEPTED / REJECTED) · Amount, target idea, message, date |
+| **My Matches** | Accepted deals | Same match card format as Founder, showing founder + offer IDs |
+
+#### Admin Dashboard — Operational Overview
+
+The admin dashboard provides a **bird's-eye view** of every idea in the platform:
+
+- **DonutChart** (custom Canvas) — animated multi-segment ring showing idea distribution across DRAFT / SUBMITTED / VERIFIED / REJECTED, with a tweened counter in the centre
+- **Interactive legend** — colour-coded dots with live counts per status
+- **MatchGraph** (custom Canvas) — force-directed network graph showing investor ↔ idea connections with real-time physics simulation and drag-to-rearrange interaction
+- **Filterable idea queue** — toggle between All / DRAFT / VERIFIED / REJECTED views · Verify and Reject action buttons on DRAFT ideas · Reject opens `RejectReasonDialog` for admin feedback
+
+### 4.5 Custom Graphics Components (Canvas)
+
+Four custom components are rendered using the JavaFX `Canvas` API with animated `Timeline` / `AnimationTimer` driven graphics — no FXML, no third-party charting libraries:
+
+| Component | Dashboard | Technique |
+|---|---|---|
+| **`FundingRing`** | Founder (per-idea card) | Circular progress arc from 12 o'clock · colour scales with progress (indigo → sky → green at 100%) · 900ms ease-out animation · centred % label + goal subtitle |
+| **`DonutChart`** | Admin (stats section) | Multi-segment proportional ring with 1.1s animated reveal · tweened centre counter · faint ring + "No data" empty state |
+| **`MatchGraph`** | Admin (network view) | Force-directed physics: Coulomb repulsion + Hooke spring + centering · `AnimationTimer` at 60fps · click-drag nodes · blue = Investor, green = Idea · in-canvas legend |
+| **`StatusBadge`** | Founder + Investor offers | Colour-coded label: PENDING (amber) / ACCEPTED (green) / REJECTED (red) |
+
+### 4.6 Styling (`app.css`)
+
+The entire desktop client shares a single CSS stylesheet with a cohesive design system:
+
+- **Colour palette:** deep navy primary (`#1d4ed8`), sky accent (`#0ea5e9`), warm red for errors (`#dc2626`), slate-based neutrals
+- **Auth screens:** soft gradient background with white card, drop shadow, 12px rounded corners
+- **Dashboard chrome:** light grey canvas (`#f4f6fb`), white card surfaces with subtle shadows, 1px slate borders
+- **Role badges:** pill-shaped — Founder (green), Investor (blue), Admin (amber)
+- **Form elements:** rounded inputs with indigo focus ring, 60% opacity disabled state
+- **Cards:** 10px radius, hover border highlight, gaussian drop shadow
+- **Tabs:** bottom-border indicator in primary colour, 600-weight labels
+
+---
+
+## 5. TDD Proof — All Services
 
 The entire platform was built following strict **Red → Green (→ Refactor)** TDD cycles. Failing tests were always committed before any implementation.
 
@@ -182,10 +353,10 @@ e308d04  test: add dispatcher routing, authz and error handling tests (RED - 5 f
 e62bad2  refactor: extract interfaces, fix ProxyController path, add retry policy           [Hamza AlHalabi]
 25014b0  test: add auth-service register, login, logout and /auth/me tests (RED - 11 failing) [Hamza AlHalabi]
 1dbb480  feat: auth-service GREEN - all passing                                             [Hamza AlHalabi]
-37614e5  test: add idea-service create, read, workflow tests (RED - 14 failing)             [EMAD-BME]
-9e4713c  feat: idea-service GREEN - 18/18 passing                                          [EMAD-BME]
-867722f  test(deal-service): RED phase — domain, stubs, and failing tests                  [EMAD-BME]
-3b170e7  feat(deal-service): GREEN phase — full implementation passing all tests            [EMAD-BME]
+37614e5  test: add idea-service create, read, workflow tests (RED - 14 failing)             [Hamza AlHalabi]
+9e4713c  feat: idea-service GREEN - 18/18 passing                                          [Hamza AlHalabi]
+867722f  test(deal-service): RED phase — domain, stubs, and failing tests                  [Hamza AlHalabi]
+3b170e7  feat(deal-service): GREEN phase — full implementation passing all tests            [Hamza AlHalabi]
 ```
 
 ### Test Results — All Services
@@ -233,7 +404,7 @@ Every service followed this exact cycle:
 
 ---
 
-## 5. REST Maturity Model (RMM Level 2)
+## 6. REST Maturity Model (RMM Level 2)
 
 All endpoints use **resource nouns**, correct **HTTP verbs**, and meaningful **status codes** — satisfying Richardson Maturity Model Level 2.
 
@@ -273,7 +444,7 @@ All endpoints use **resource nouns**, correct **HTTP verbs**, and meaningful **s
 
 ---
 
-## 6. Security & Network Isolation
+## 7. Security & Network Isolation
 
 ### JWT Flow
 
@@ -310,7 +481,7 @@ Every request gets a `X-Correlation-Id` UUID (generated by the Dispatcher if abs
 
 ---
 
-## 7. Observability
+## 8. Observability
 
 ### Metrics (Prometheus + Grafana)
 
@@ -354,7 +525,7 @@ All services emit JSON logs via `logstash-logback-encoder`. Every line includes:
 
 ---
 
-## 8. Running the Project
+## 9. Running the Project
 
 ### Prerequisites
 
@@ -428,7 +599,7 @@ The `JdbcAuditLogWriterContainerTest` spins up a real PostgreSQL container via T
 
 ---
 
-## 9. Demo Walkthrough
+## 10. Demo Walkthrough
 
 This section shows every key system behaviour live. Run these commands after `docker-compose up --build -d`.
 
@@ -615,7 +786,7 @@ The **Request Rate** panel in Grafana will spike as the test runs, and the **Lat
 
 ---
 
-## 10. Load Testing
+## 11. Load Testing
 
 Load tests target the **Dispatcher** (`http://localhost:8080`) — the only public entry point.
 
@@ -702,21 +873,13 @@ Each virtual user executes the complete 8-step investment lifecycle:
 
 ---
 
-## 11. Team & Contributions
+## 12. Author
 
 | Member | GitHub | Key Contributions |
 |---|---|---|
-| **Hamza AlHalabi** | [@TheGhost966](https://github.com/TheGhost966) | Project setup, Dispatcher (TDD RED/GREEN/Refactor), Auth Service (TDD), Docker + docker-compose, Prometheus config, Dockerfiles |
-| **Emad** | [@EMAD-BME](https://github.com/EMAD-BME) | Idea Service (TDD RED/GREEN), Deal Service (TDD RED/GREEN), Observability (correlation IDs, JSON logging), Grafana dashboards, Load Testing (k6) |
-
-```bash
-# Verify commit distribution
-git shortlog -sn --all
-# 17  Hamza AlHalabi
-#  7  EMAD-BME
-```
+| **Hamza AlHalabi** | [@TheGhost966](https://github.com/TheGhost966) | Full-stack design & implementation — Project setup, Dispatcher (TDD), Auth Service (TDD + JDBC audit), Idea Service (TDD), Deal Service (TDD), Desktop Client (JavaFX GUI), Docker + docker-compose, Observability (Prometheus, Grafana, correlation IDs, JSON logging), Load Testing (k6) |
 
 ---
 
 *Built for the Java Microservices (BSM) Lab — Spring 2026.*
-*Java 21 · Spring Boot 3.3.1 · MongoDB · Redis · Prometheus · Grafana · k6*
+*Java 21 · Spring Boot 3.3.1 · JavaFX 21 · MongoDB · PostgreSQL (JDBC) · Redis · Prometheus · Grafana · k6*
